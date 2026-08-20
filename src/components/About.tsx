@@ -23,7 +23,7 @@ export default function About() {
             >
               <img
                 src={LOGOS.studio}
-                alt="KapriInk Tattoo Studio Logo featuring classic car and tattoo machine"
+                alt="KaprInk Tattoo Studio Logo featuring classic car and tattoo machine"
                 className="w-[94%] h-[94%] object-cover rounded-full border border-white/10"
               />
             </motion.div>

@@ -30,8 +30,8 @@ export const BOOKING_PAYMENT_URL = ""; // Unconfigured state, ready to receive p
 
 export const ARTIST_INFO = {
   name: "Jordynn Kapri Smith",
-  brandName: "KapriInk",
-  studioBranding: "KapriInk Tattoo Studio",
+  brandName: "KaprInk",
+  studioBranding: "KaprInk Tattoo Studio",
   bio: "I love cars, I love to paint. I’m a big lover and family girl. I love the outdoors, so does my dog stormi. Stormis my world!",
   stormiNote: "Stormi is Jordynn's beloved dog and constant outdoor companion. As Jordynn says, 'Stormi's my world!'",
 };

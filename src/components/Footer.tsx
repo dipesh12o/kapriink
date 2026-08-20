@@ -17,7 +17,7 @@ export default function Footer() {
           <div className="md:col-span-4 flex items-center justify-center md:justify-start gap-4">
             <img
               src={LOGOS.circular}
-              alt="KapriInk Tattoo Logo"
+              alt="KaprInk Tattoo Logo"
               className="h-14 w-14 rounded-full border border-primary/20"
             />
             <div className="text-left">

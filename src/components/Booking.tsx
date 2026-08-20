@@ -29,7 +29,7 @@ export default function Booking() {
     e.preventDefault();
 
     // Construct Mailto Link
-    const subject = encodeURIComponent(`KapriInk Tattoo Booking Request - ${formData.name}`);
+    const subject = encodeURIComponent(`KaprInk Tattoo Booking Request - ${formData.name}`);
     const body = encodeURIComponent(
       `Tattoo Inquiry Details:\n` +
       `-------------------------\n` +

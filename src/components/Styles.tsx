@@ -97,7 +97,7 @@ export default function Styles() {
                 <div className="absolute inset-0 w-full h-full overflow-hidden">
                   <img
                     src={style.sampleImage}
-                    alt={`${style.name} tattoo sample by KapriInk`}
+                    alt={`${style.name} tattoo sample by KaprInk`}
                     className={`w-full h-full object-cover transition-all duration-700 ${
                       isActive ? "grayscale-0 scale-105" : "grayscale"
                     } md:grayscale md:group-hover:grayscale-0 md:group-hover:scale-105`}

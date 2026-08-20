@@ -37,11 +37,11 @@ export default function Navbar() {
           <a href="#home" className="flex items-center gap-3 group">
             <img
               src={LOGOS.circular}
-              alt="KapriInk Circular Logo"
+              alt="KaprInk Circular Logo"
               className="h-12 w-12 rounded-full border border-primary/30 group-hover:border-primary transition-colors"
             />
             <span className="font-display font-bold text-lg tracking-wider text-white group-hover:text-primary transition-colors">
-              KAPRIINK<span className="text-secondary">.</span>
+              KAPRINK<span className="text-secondary">.</span>
             </span>
           </a>
 

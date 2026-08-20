@@ -117,7 +117,7 @@ export default function Hero() {
             <div className="relative w-full h-full overflow-hidden rounded-lg border-2 border-white shadow-2xl">
               <img
                 src={heroImage}
-                alt="Featured Tattoo artwork - Skull with arrow through it by KapriInk"
+                alt="Featured Tattoo artwork - Skull with arrow through it by KaprInk"
                 className="w-full h-full object-cover transform scale-100 group-hover:scale-105 transition-transform duration-700"
               />
               {/* Overlay shadow */}
