@@ -52,6 +52,14 @@ export default function AdminPortal() {
 
   const categories = ["Abstract", "Dark Shading", "Fine Line", "Color"];
 
+  // Helper to translate generic network/fetch failures into useful config errors
+  const getFriendlyErrorMessage = useCallback((message: string) => {
+    if (message === "Failed to fetch") {
+      return "Failed to connect to Supabase. Please verify that VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are correctly configured in your local .env file.";
+    }
+    return message;
+  }, []);
+
   // Fetch Current Gallery Data from Database (defined before useEffect to avoid initialization warnings)
   const fetchTattoos = useCallback(async () => {
     try {
@@ -64,12 +72,12 @@ export default function AdminPortal() {
       if (error) throw error;
       setTattoos(data || []);
     } catch (err: any) {
-      setCrudError("Failed to fetch tattoos: " + err.message);
+      setCrudError("Failed to fetch tattoos: " + getFriendlyErrorMessage(err.message));
     } finally {
       setTattoosLoading(false);
       setLoading(false);
     }
-  }, []);
+  }, [getFriendlyErrorMessage]);
 
   // Check if UID is authorized in the public.admins table (defined before useEffect to avoid initialization warnings)
   const checkAdminStatus = useCallback(async (uid: string) => {
@@ -138,7 +146,7 @@ export default function AdminPortal() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
     } catch (err: any) {
-      setAuthError(err.message);
+      setAuthError(getFriendlyErrorMessage(err.message));
       setAuthActionLoading(false);
     }
   };
@@ -156,7 +164,7 @@ export default function AdminPortal() {
       if (error) throw error;
       setAuthSuccess("Password reset instructions sent to your email.");
     } catch (err: any) {
-      setAuthError(err.message);
+      setAuthError(getFriendlyErrorMessage(err.message));
     } finally {
       setAuthActionLoading(false);
     }
@@ -182,7 +190,7 @@ export default function AdminPortal() {
       setNewPassword("");
       setConfirmPassword("");
     } catch (err: any) {
-      setAuthError(err.message);
+      setAuthError(getFriendlyErrorMessage(err.message));
     } finally {
       setAuthActionLoading(false);
     }
@@ -273,7 +281,7 @@ export default function AdminPortal() {
 
       fetchTattoos();
     } catch (err: any) {
-      setCrudError(err.message);
+      setCrudError(getFriendlyErrorMessage(err.message));
     } finally {
       setUploadProgress(false);
     }
@@ -310,7 +318,7 @@ export default function AdminPortal() {
       setCrudSuccess("Tattoo deleted successfully.");
       fetchTattoos();
     } catch (err: any) {
-      setCrudError("Failed to delete tattoo: " + err.message);
+      setCrudError("Failed to delete tattoo: " + getFriendlyErrorMessage(err.message));
     }
   };
 
