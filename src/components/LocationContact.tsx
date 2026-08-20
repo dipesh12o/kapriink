@@ -1,11 +1,7 @@
-import { MapPin, Phone, Mail, Clock, ExternalLink } from "lucide-react";
+import { MapPin, Phone, Mail, Clock } from "lucide-react";
 import { CONTACT_INFO, AVAILABILITY } from "../data/artistData";
 
 export default function LocationContact() {
-  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-    CONTACT_INFO.fullAddress
-  )}`;
-
   return (
     <section id="contact" className="py-24 bg-dark-gray border-t border-white/5 relative overflow-hidden">
       {/* Glow overlay */}
@@ -46,16 +42,6 @@ export default function LocationContact() {
                   <p className="text-light-gray/80 text-sm">
                     {CONTACT_INFO.cityStateZip}
                   </p>
-                  
-                  <a
-                    href={directionsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-secondary font-bold uppercase tracking-wider mt-2.5 hover:text-white transition-colors"
-                  >
-                    Get Directions
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
                 </div>
               </div>
 
