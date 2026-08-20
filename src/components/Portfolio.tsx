@@ -4,7 +4,7 @@ import { Maximize2 } from "lucide-react";
 import { PORTFOLIO } from "../data/artistData";
 import type { PortfolioItem } from "../data/artistData";
 import Lightbox from "./Lightbox";
-const API_URL = import.meta.env.VITE_API_URL || "";
+const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 export default function Portfolio() {
   const [filter, setFilter] = useState("All");
@@ -36,12 +36,9 @@ export default function Portfolio() {
           setGalleryItems([]);
         }
       } catch (err) {
+        console.error("Gallery fetch failed:", err);
         setFetchError("Failed to load tattoo gallery. Please check your connection.");
         if (!import.meta.env.PROD) {
-          console.warn(
-            "Express fetch failed. Falling back to local static portfolio assets in dev mode.",
-            err
-          );
           // Fallback state remains as initialized (PORTFOLIO)
         } else {
           setGalleryItems([]);

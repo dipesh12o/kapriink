@@ -6,9 +6,24 @@ const tattooRoutes = require("./routes/tattooRoutes");
 
 const app = express();
 
-// CORS config supporting HTTP-only cookies
+const whitelist = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://kapriink.vercel.app"
+];
+if (process.env.CLIENT_URL) {
+  whitelist.push(process.env.CLIENT_URL);
+}
+
 const corsOptions = {
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (whitelist.indexOf(origin) !== -1 || whitelist.indexOf(origin.replace(/\/$/, "")) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
