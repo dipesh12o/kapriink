@@ -4,41 +4,48 @@ import { Maximize2 } from "lucide-react";
 import { PORTFOLIO } from "../data/artistData";
 import type { PortfolioItem } from "../data/artistData";
 import Lightbox from "./Lightbox";
-import { supabase } from "../lib/supabaseClient";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 export default function Portfolio() {
   const [filter, setFilter] = useState("All");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [galleryItems, setGalleryItems] = useState<PortfolioItem[]>(PORTFOLIO);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const categories = ["All", "Abstract", "Dark Shading", "Fine Line", "Color"];
 
-  // Fetch Tattoos from Supabase, fallback to static if empty/fails
+  // Fetch Tattoos from Express GridFS backend
   useEffect(() => {
     async function loadTattoos() {
       try {
-        const { data, error } = await supabase
-          .from("tattoos")
-          .select("id, src, alt, categories")
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
+        const response = await fetch(`${API_URL}/api/tattoos`);
+        if (!response.ok) throw new Error("Failed to fetch gallery items.");
+        
+        const data = await response.json();
 
         if (data && data.length > 0) {
-          const mappedData: PortfolioItem[] = data.map((item) => ({
-            id: item.id,
-            src: item.src,
-            alt: item.alt,
-            categories: item.categories,
+          const mappedData: PortfolioItem[] = data.map((item: any) => ({
+            id: item._id,
+            src: `${API_URL}/api/tattoos/image/${item.imageFileId}`,
+            alt: item.title,
+            categories: item.category,
           }));
           setGalleryItems(mappedData);
+        } else if (import.meta.env.PROD) {
+          // If empty in production, show empty list (no static fallback)
+          setGalleryItems([]);
         }
       } catch (err) {
-        console.warn(
-          "Supabase fetch failed or is unconfigured. Falling back to local static portfolio assets.",
-          err
-        );
-        // Fallback state remains as initialized (PORTFOLIO)
+        setFetchError("Failed to load tattoo gallery. Please check your connection.");
+        if (!import.meta.env.PROD) {
+          console.warn(
+            "Express fetch failed. Falling back to local static portfolio assets in dev mode.",
+            err
+          );
+          // Fallback state remains as initialized (PORTFOLIO)
+        } else {
+          setGalleryItems([]);
+        }
       }
     }
     loadTattoos();
@@ -98,6 +105,12 @@ export default function Portfolio() {
             ))}
           </div>
         </div>
+
+        {fetchError && import.meta.env.PROD && (
+          <div className="text-center py-12 text-red-500/70 text-xs sm:text-sm font-semibold uppercase tracking-widest border border-dashed border-red-500/20 rounded-lg bg-red-950/5 mb-8">
+            {fetchError}
+          </div>
+        )}
 
         {/* Gallery Grid */}
         <motion.div
