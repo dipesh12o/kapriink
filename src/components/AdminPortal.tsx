@@ -35,6 +35,28 @@ export default function AdminPortal() {
   );
   const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
   const [authActionLoading, setAuthActionLoading] = useState(false);
+  const [recoveryError, setRecoveryError] = useState("");
+
+  // Parse URL hash for Supabase redirect errors (e.g. otp_expired)
+  useEffect(() => {
+    const hash = window.location.hash || "";
+    if (hash.includes("error_description=") || hash.includes("error_code=")) {
+      const params = new URLSearchParams(hash.substring(1));
+      const errorCode = params.get("error_code") || "";
+      const errorDesc = params.get("error_description") || "";
+
+      if (errorCode === "otp_expired" || errorDesc.toLowerCase().includes("expired") || errorDesc.toLowerCase().includes("invalid")) {
+        setRecoveryError("This password reset link has expired or is invalid.");
+      } else if (errorDesc) {
+        setRecoveryError(decodeURIComponent(errorDesc.replace(/\+/g, " ")));
+      } else {
+        setRecoveryError("This password reset link is invalid or has expired.");
+      }
+      
+      // Clear hash so it doesn't persist
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
 
   // Password Management
   const [newPassword, setNewPassword] = useState("");
@@ -185,10 +207,15 @@ export default function AdminPortal() {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      setAuthSuccess("Password updated successfully.");
+      setAuthSuccess("Password updated successfully. You can now log in with your new password.");
+      
+      // Log out to clear the recovery session properly
+      await supabase.auth.signOut();
+      
       setIsResetMode(false);
       setNewPassword("");
       setConfirmPassword("");
+      window.location.hash = ""; // Clear hash arguments
     } catch (err: any) {
       setAuthError(getFriendlyErrorMessage(err.message));
     } finally {
@@ -459,6 +486,46 @@ export default function AdminPortal() {
 
   // 4. NOT LOGGED IN / LOGIN FORM
   if (!session) {
+    if (recoveryError) {
+      return (
+        <div className="flex items-center justify-center min-h-screen px-4 bg-dark">
+          <div className="w-full max-w-md bg-dark-gray border border-red-500/30 p-8 rounded-lg relative text-center space-y-6">
+            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-950/20 border border-red-500/40 text-red-500">
+              <AlertCircle className="h-10 w-10" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-display font-extrabold text-white uppercase tracking-wide">
+                Link Expired
+              </h2>
+              <p className="text-light-gray/70 text-sm leading-relaxed">
+                {recoveryError}
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setForgotPasswordMode(true);
+                  setRecoveryError(""); // Clear error to allow requesting new link
+                  setAuthError("");
+                  setAuthSuccess("");
+                }}
+                className="w-full py-3 bg-primary text-white rounded-md text-sm font-bold uppercase tracking-wider hover:neon-pink-border-glow transition-all flex items-center justify-center gap-2"
+              >
+                Request New Reset Link
+              </button>
+              <button
+                onClick={navigateHome}
+                className="w-full py-3 border border-white/10 text-white rounded-md text-sm font-bold uppercase tracking-wider hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Studio Site
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex items-center justify-center min-h-screen px-4 bg-dark">
         <div className="w-full max-w-md bg-dark-gray border border-white/5 p-8 rounded-lg relative">
