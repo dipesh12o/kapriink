@@ -1,19 +1,52 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Maximize2 } from "lucide-react";
 import { PORTFOLIO } from "../data/artistData";
 import type { PortfolioItem } from "../data/artistData";
 import Lightbox from "./Lightbox";
+import { supabase } from "../lib/supabaseClient";
 
 export default function Portfolio() {
   const [filter, setFilter] = useState("All");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [galleryItems, setGalleryItems] = useState<PortfolioItem[]>(PORTFOLIO);
 
   const categories = ["All", "Abstract", "Dark Shading", "Fine Line", "Color"];
 
+  // Fetch Tattoos from Supabase, fallback to static if empty/fails
+  useEffect(() => {
+    async function loadTattoos() {
+      try {
+        const { data, error } = await supabase
+          .from("tattoos")
+          .select("id, src, alt, categories")
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const mappedData: PortfolioItem[] = data.map((item) => ({
+            id: item.id,
+            src: item.src,
+            alt: item.alt,
+            categories: item.categories,
+          }));
+          setGalleryItems(mappedData);
+        }
+      } catch (err) {
+        console.warn(
+          "Supabase fetch failed or is unconfigured. Falling back to local static portfolio assets.",
+          err
+        );
+        // Fallback state remains as initialized (PORTFOLIO)
+      }
+    }
+    loadTattoos();
+  }, []);
+
   const filteredPortfolio = filter === "All"
-    ? PORTFOLIO
-    : PORTFOLIO.filter((item) => item.categories.includes(filter));
+    ? galleryItems
+    : galleryItems.filter((item) => item.categories.includes(filter));
 
   // Custom height/layout assignments for editorial spacing (masonry feel)
   const getGridClasses = (id: string) => {
@@ -26,8 +59,7 @@ export default function Portfolio() {
   };
 
   const handleImageClick = (item: PortfolioItem) => {
-    // Find index of item in filtered list for lightbox pagination
-    const idx = PORTFOLIO.findIndex((p) => p.id === item.id);
+    const idx = galleryItems.findIndex((p) => p.id === item.id);
     if (idx !== -1) {
       setLightboxIndex(idx);
     }
@@ -124,7 +156,7 @@ export default function Portfolio() {
       {/* Lightbox Modal */}
       {lightboxIndex !== null && (
         <Lightbox
-          images={PORTFOLIO}
+          images={galleryItems}
           currentIndex={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
           onChangeIndex={(idx) => setLightboxIndex(idx)}

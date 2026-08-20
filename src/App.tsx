@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import Styles from "./components/Styles";
@@ -6,8 +7,31 @@ import About from "./components/About";
 import Booking from "./components/Booking";
 import LocationContact from "./components/LocationContact";
 import Footer from "./components/Footer";
+import AdminPortal from "./components/AdminPortal";
 
 function App() {
+  const [path, setPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setPath(window.location.pathname);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  // Check if the current route is the admin portal
+  const isAdminRoute = path.startsWith("/admin");
+
+  if (isAdminRoute) {
+    return (
+      <div className="relative min-h-screen bg-dark text-white selection:bg-primary selection:text-white antialiased">
+        <div className="noise-overlay" />
+        <AdminPortal />
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen bg-dark text-white selection:bg-primary selection:text-white antialiased">
       {/* Editorial SVG Noise Grain Overlay */}
