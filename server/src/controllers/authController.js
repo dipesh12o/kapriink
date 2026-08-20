@@ -59,17 +59,19 @@ const login = async (req, res) => {
     );
 
     // Set cookie
+    const isProd = process.env.NODE_ENV === "production";
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     });
 
     res.json({
       id: admin._id,
       email: admin.email,
-      role: admin.role
+      role: admin.role,
+      token
     });
   } catch (error) {
     console.error("Login error:", error.message);

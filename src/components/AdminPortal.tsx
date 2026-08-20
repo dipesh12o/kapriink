@@ -75,7 +75,20 @@ export default function AdminPortal() {
     return message;
   }, []);
 
-  // Fetch Current Gallery Data from Database
+  // Helper for Authorization Headers
+  const getAuthHeaders = useCallback((includeJsonContentType = false) => {
+    const token = localStorage.getItem("kaprink_token") || "";
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    if (includeJsonContentType) {
+      headers["Content-Type"] = "application/json";
+    }
+    return headers;
+  }, []);
+
+  // Fetch Tattoos from Database (Public)
   const fetchTattoos = useCallback(async () => {
     try {
       setTattoosLoading(true);
@@ -105,7 +118,9 @@ export default function AdminPortal() {
   useEffect(() => {
     const checkSession = async () => {
       try {
+        const token = localStorage.getItem("kaprink_token") || "";
         const res = await fetch(`${API_URL}/api/auth/me`, {
+          headers: token ? { "Authorization": `Bearer ${token}` } : {},
           credentials: "include"
         });
         if (res.ok) {
@@ -116,6 +131,7 @@ export default function AdminPortal() {
         } else {
           setSession(null);
           setIsAdmin(null);
+          localStorage.removeItem("kaprink_token");
         }
       } catch (err) {
         console.error("Session check failed:", err);
@@ -174,6 +190,10 @@ export default function AdminPortal() {
 
       if (!res.ok) {
         throw new Error(data.message || "Login failed.");
+      }
+
+      if (data.token) {
+        localStorage.setItem("kaprink_token", data.token);
       }
 
       setSession(data);
@@ -290,13 +310,14 @@ export default function AdminPortal() {
     try {
       const res = await fetch(`${API_URL}/api/auth/change-password`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(true),
         credentials: "include",
         body: JSON.stringify({ currentPassword, newPassword })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to update password.");
 
+      localStorage.removeItem("kaprink_token");
       setAuthSuccess("Password updated successfully. Please log in again.");
       setSession(null);
       setIsAdmin(null);
@@ -320,6 +341,7 @@ export default function AdminPortal() {
     } catch (err) {
       console.error("Logout request failed:", err);
     } finally {
+      localStorage.removeItem("kaprink_token");
       setSession(null);
       setIsAdmin(null);
       setTattoos([]);
@@ -370,6 +392,7 @@ export default function AdminPortal() {
 
       const res = await fetch(`${API_URL}/api/tattoos`, {
         method: "POST",
+        headers: getAuthHeaders(false),
         credentials: "include",
         body: formData
       });
@@ -406,6 +429,7 @@ export default function AdminPortal() {
     try {
       const res = await fetch(`${API_URL}/api/tattoos/${id}`, {
         method: "DELETE",
+        headers: getAuthHeaders(false),
         credentials: "include"
       });
       const data = await res.json();
