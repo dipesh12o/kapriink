@@ -159,7 +159,7 @@ export default function AdminPortal() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/admin`,
+        redirectTo: `${import.meta.env.VITE_APP_URL || window.location.origin}/admin`,
       });
       if (error) throw error;
       setAuthSuccess("Password reset instructions sent to your email.");
