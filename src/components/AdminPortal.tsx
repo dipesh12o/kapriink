@@ -34,7 +34,6 @@ export default function AdminPortal() {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
-  const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
   const [authActionLoading, setAuthActionLoading] = useState(false);
   const [recoveryError, setRecoveryError] = useState("");
 
@@ -206,29 +205,6 @@ export default function AdminPortal() {
     }
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthActionLoading(true);
-    setAuthError("");
-    setAuthSuccess("");
-
-    try {
-      const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to submit request.");
-      
-      setAuthSuccess("If an account exists for this email, password reset instructions have been sent.");
-    } catch (err: any) {
-      setAuthError(getFriendlyErrorMessage(err.message));
-    } finally {
-      setAuthActionLoading(false);
-    }
-  };
-
   const handleSetupPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthActionLoading(true);
@@ -345,7 +321,6 @@ export default function AdminPortal() {
       setSession(null);
       setIsAdmin(null);
       setTattoos([]);
-      setForgotPasswordMode(false);
       window.history.pushState({}, "", "/admin");
     }
   };
@@ -660,19 +635,6 @@ export default function AdminPortal() {
             </div>
             <div className="flex flex-col gap-3 pt-2">
               <button
-                onClick={() => {
-                  setForgotPasswordMode(true);
-                  setRecoveryError(""); // Clear error to allow requesting new link
-                  setIsSetupMode(false);
-                  setIsResetMode(false);
-                  setAuthError("");
-                  setAuthSuccess("");
-                }}
-                className="w-full py-3 bg-primary text-white rounded-md text-sm font-bold uppercase tracking-wider hover:neon-pink-border-glow transition-all flex items-center justify-center gap-2"
-              >
-                Request New Reset Link
-              </button>
-              <button
                 onClick={navigateHome}
                 className="w-full py-3 border border-white/10 text-white rounded-md text-sm font-bold uppercase tracking-wider hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
               >
@@ -699,138 +661,66 @@ export default function AdminPortal() {
           </button>
 
           <h2 className="text-3xl font-display font-extrabold text-white uppercase text-center tracking-wide mt-8 mb-6">
-            {forgotPasswordMode ? "Reset Password" : "Admin Login"}
+            Admin Login
           </h2>
 
-          {forgotPasswordMode ? (
-            // Forgot Password Form
-            <form onSubmit={handleForgotPassword} className="space-y-5">
-              {authError && (
-                <div className="flex items-center gap-2 p-4 bg-red-950/20 border border-red-500/30 rounded text-red-400 text-sm">
-                  <AlertCircle className="h-5 w-5 shrink-0" />
-                  <span>{authError}</span>
-                </div>
-              )}
-              {authSuccess && (
-                <div className="flex items-center gap-2 p-4 bg-green-950/20 border border-green-500/30 rounded text-green-400 text-sm">
-                  <Check className="h-5 w-5 shrink-0" />
-                  <span>{authSuccess}</span>
-                </div>
-              )}
-              <div className="space-y-1">
-                <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
-                  Admin Email
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3.5 h-5 w-5 text-white/30" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="jordynnkaprink@gmail.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-dark border border-white/10 rounded-md py-3 pl-10 pr-4 text-white focus:outline-none focus:border-primary transition-colors text-sm"
-                  />
-                </div>
+          <form onSubmit={handleLogin} className="space-y-5">
+            {authError && (
+              <div className="flex items-center gap-2 p-4 bg-red-950/20 border border-red-500/30 rounded text-red-400 text-sm">
+                <AlertCircle className="h-5 w-5 shrink-0" />
+                <span>{authError}</span>
               </div>
-              <button
-                type="submit"
-                disabled={authActionLoading}
-                className="w-full py-3 bg-primary text-white font-bold uppercase tracking-wider rounded-md hover:neon-pink-border-glow focus:outline-none transition-all flex justify-center items-center gap-2 text-sm"
-              >
-                {authActionLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  "Send Reset Instructions"
-                )}
-              </button>
-              <div className="text-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotPasswordMode(false);
-                    setAuthError("");
-                    setAuthSuccess("");
-                  }}
-                  className="text-xs text-light-gray hover:text-white uppercase tracking-widest font-semibold transition-colors"
-                >
-                  Back to Login
-                </button>
+            )}
+            {authSuccess && (
+              <div className="flex items-center gap-2 p-4 bg-green-950/20 border border-green-500/30 rounded text-green-400 text-sm">
+                <Check className="h-5 w-5 shrink-0" />
+                <span>{authSuccess}</span>
               </div>
-            </form>
-          ) : (
-            // Standard Login Form
-            <form onSubmit={handleLogin} className="space-y-5">
-              {authError && (
-                <div className="flex items-center gap-2 p-4 bg-red-950/20 border border-red-500/30 rounded text-red-400 text-sm">
-                  <AlertCircle className="h-5 w-5 shrink-0" />
-                  <span>{authError}</span>
-                </div>
+            )}
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3.5 h-5 w-5 text-white/30" />
+                <input
+                  type="email"
+                  required
+                  placeholder="jordynnkaprink@gmail.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-dark border border-white/10 rounded-md py-3 pl-10 pr-4 text-white focus:outline-none focus:border-primary transition-colors text-sm"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3.5 h-5 w-5 text-white/30" />
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-dark border border-white/10 rounded-md py-3 pl-10 pr-4 text-white focus:outline-none focus:border-primary transition-colors text-sm"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={authActionLoading}
+              className="w-full py-3 bg-primary text-white font-bold uppercase tracking-wider rounded-md hover:neon-pink-border-glow focus:outline-none transition-all flex justify-center items-center gap-2 text-sm"
+            >
+              {authActionLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                "Access Portal"
               )}
-              {authSuccess && (
-                <div className="flex items-center gap-2 p-4 bg-green-950/20 border border-green-500/30 rounded text-green-400 text-sm">
-                  <Check className="h-5 w-5 shrink-0" />
-                  <span>{authSuccess}</span>
-                </div>
-              )}
-              <div className="space-y-1">
-                <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3.5 h-5 w-5 text-white/30" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="jordynnkaprink@gmail.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-dark border border-white/10 rounded-md py-3 pl-10 pr-4 text-white focus:outline-none focus:border-primary transition-colors text-sm"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
-                    Password
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForgotPasswordMode(true);
-                      setAuthError("");
-                      setAuthSuccess("");
-                    }}
-                    className="text-[10px] uppercase tracking-widest font-bold text-secondary hover:text-white transition-colors"
-                  >
-                    Forgot?
-                  </button>
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3.5 h-5 w-5 text-white/30" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-dark border border-white/10 rounded-md py-3 pl-10 pr-4 text-white focus:outline-none focus:border-primary transition-colors text-sm"
-                  />
-                </div>
-              </div>
-              <button
-                type="submit"
-                disabled={authActionLoading}
-                className="w-full py-3 bg-primary text-white font-bold uppercase tracking-wider rounded-md hover:neon-pink-border-glow focus:outline-none transition-all flex justify-center items-center gap-2 text-sm"
-              >
-                {authActionLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  "Access Portal"
-                )}
-              </button>
-            </form>
-          )}
+            </button>
+          </form>
         </div>
       </div>
     );
