@@ -29,19 +29,19 @@ export default function Styles() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="group relative flex flex-col justify-end bg-dark-gray border border-white/5 rounded-lg overflow-hidden aspect-[3/4] hover:border-primary/50 hover:neon-pink-border-glow transition-all duration-500"
+              className="group relative flex flex-col justify-end bg-dark-gray border border-primary/20 md:border-white/5 rounded-lg overflow-hidden aspect-[3/4] md:hover:border-primary/50 md:hover:neon-pink-border-glow transition-all duration-500"
             >
               {/* Style Image */}
               <div className="absolute inset-0 w-full h-full overflow-hidden">
                 <img
                   src={style.sampleImage}
                   alt={`${style.name} tattoo sample by KapriInk`}
-                  className="w-full h-full object-cover filter grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700"
+                  className="w-full h-full object-cover filter grayscale-0 md:grayscale md:group-hover:grayscale-0 md:group-hover:scale-105 transition-all duration-700"
                   loading="lazy"
                 />
                 {/* Gradient shader overlays */}
-                <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/40 to-transparent opacity-80 group-hover:opacity-60 transition-opacity" />
-                <div className="absolute inset-0 bg-primary/10 mix-blend-color group-hover:bg-transparent transition-colors duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/40 to-transparent opacity-80 md:group-hover:opacity-60 transition-opacity" />
+                <div className="absolute inset-0 bg-transparent md:bg-primary/10 md:mix-blend-color md:group-hover:bg-transparent transition-colors duration-500" />
               </div>
 
               {/* Card Label Content */}
@@ -49,10 +49,10 @@ export default function Styles() {
                 <span className="inline-block px-2 py-0.5 text-[9px] font-bold tracking-widest bg-white/10 text-white rounded uppercase">
                   Style 0{index + 1}
                 </span>
-                <h3 className="text-2xl font-display font-extrabold tracking-wider text-white group-hover:text-primary transition-colors">
+                <h3 className="text-2xl font-display font-extrabold tracking-wider text-primary md:text-white md:group-hover:text-primary transition-colors">
                   {style.name}
                 </h3>
-                <p className="text-light-gray/70 text-xs sm:text-sm leading-relaxed group-hover:text-white transition-colors duration-300">
+                <p className="text-white md:text-light-gray/70 text-xs sm:text-sm leading-relaxed md:group-hover:text-white transition-colors duration-300">
                   {style.description}
                 </p>
               </div>

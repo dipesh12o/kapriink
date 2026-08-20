@@ -18,26 +18,10 @@ export default function Portfolio() {
   // Custom height/layout assignments for editorial spacing (masonry feel)
   const getGridClasses = (id: string) => {
     switch (id) {
-      case "skull-arrow":
-        return "lg:col-span-1 h-[450px]"; // Tall Leg shot
-      case "cowboy-hat":
-        return "lg:col-span-1 h-[450px]"; // Ankle shot
-      case "script-back":
-        return "lg:col-span-1 h-[450px]"; // Tall Spine script
       case "botanical-sternum":
-        return "lg:col-span-2 h-[450px]"; // Wide Sternum shot
-      case "red-floral":
-        return "lg:col-span-1 h-[450px]"; // Floral arm shot
-      case "spider-amor":
-        return "lg:col-span-1 h-[450px]"; // Spider abdomen shot
-      case "eye-heart":
-        return "lg:col-span-1 h-[450px]"; // Eye/heart arm shot
-      case "mushroom":
-        return "lg:col-span-1 h-[450px]"; // Mushroom leg shot
-      case "abstract-skull-8ball":
-        return "lg:col-span-1 h-[450px]"; // Vertical melting skull forearm shot
+        return "col-span-1 md:col-span-2 aspect-[3/4] md:aspect-auto h-auto md:h-[350px] lg:h-[450px]";
       default:
-        return "lg:col-span-1 h-[450px]";
+        return "col-span-1 aspect-[3/4] md:aspect-auto h-auto md:h-[350px] lg:h-[450px]";
     }
   };
 
@@ -86,7 +70,7 @@ export default function Portfolio() {
         {/* Gallery Grid */}
         <motion.div
           layout
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-auto"
+          className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 auto-rows-auto"
         >
           <AnimatePresence mode="popLayout">
             {filteredPortfolio.map((item) => (
