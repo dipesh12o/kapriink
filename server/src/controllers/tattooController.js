@@ -54,6 +54,12 @@ const uploadTattoo = async (req, res) => {
     return res.status(400).json({ message: "Please upload an image file." });
   }
 
+  // Validate image file type
+  const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  if (!allowedMimeTypes.includes(req.file.mimetype)) {
+    return res.status(400).json({ message: "Only JPEG, PNG, WEBP, and GIF images are allowed." });
+  }
+
   const { title } = req.body;
   let { category } = req.body;
 
@@ -156,6 +162,12 @@ const replaceTattooImage = async (req, res) => {
 
   if (!req.file) {
     return res.status(400).json({ message: "Please upload an image file." });
+  }
+
+  // Validate image file type
+  const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  if (!allowedMimeTypes.includes(req.file.mimetype)) {
+    return res.status(400).json({ message: "Only JPEG, PNG, WEBP, and GIF images are allowed." });
   }
 
   try {
