@@ -3,6 +3,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const authRoutes = require("./routes/authRoutes");
 const tattooRoutes = require("./routes/tattooRoutes");
+const availabilityRoutes = require("./routes/availabilityRoutes");
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use(express.urlencoded({ extended: true }));
 // API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/tattoos", tattooRoutes);
+app.use("/api/availability", availabilityRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

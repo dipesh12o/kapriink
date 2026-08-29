@@ -1,7 +1,109 @@
+import { useEffect, useState } from "react";
 import { MapPin, Phone, Mail, Clock } from "lucide-react";
-import { CONTACT_INFO, AVAILABILITY } from "../data/artistData";
+import { CONTACT_INFO } from "../data/artistData";
+
+const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
+interface DaySchedule {
+  isOpen: boolean;
+  openTime: string;
+  closeTime: string;
+}
+
+interface AvailabilityData {
+  days: {
+    monday: DaySchedule;
+    tuesday: DaySchedule;
+    wednesday: DaySchedule;
+    thursday: DaySchedule;
+    friday: DaySchedule;
+    saturday: DaySchedule;
+    sunday: DaySchedule;
+  };
+  note: string;
+}
+
+const DAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+
+const DAY_LABELS: Record<string, string> = {
+  monday: "Monday",
+  tuesday: "Tuesday",
+  wednesday: "Wednesday",
+  thursday: "Thursday",
+  friday: "Friday",
+  saturday: "Saturday",
+  sunday: "Sunday"
+};
+
+const formatTime12h = (timeStr: string) => {
+  if (!timeStr) return "";
+  const [hoursStr, minutesStr] = timeStr.split(":");
+  const hours = parseInt(hoursStr, 10);
+  const ampm = hours >= 12 ? "PM" : "AM";
+  const hours12 = hours % 12 || 12;
+  return `${hours12}:${minutesStr} ${ampm}`;
+};
 
 export default function LocationContact() {
+  const [availability, setAvailability] = useState<AvailabilityData | null>(null);
+
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/availability`);
+        if (res.ok) {
+          const data = await res.json();
+          setAvailability(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch studio availability:", err);
+      }
+    };
+    fetchAvailability();
+  }, []);
+
+  // Helper to group consecutive open days with identical hours
+  const getGroupedSchedule = () => {
+    if (!availability) return [];
+
+    const groups: { startDay: string; endDay: string; hours: string }[] = [];
+    let currentGroup: { startDay: string; endDay: string; hours: string } | null = null;
+
+    DAY_KEYS.forEach((dayKey) => {
+      const schedule = availability.days[dayKey];
+      if (schedule.isOpen) {
+        const hoursString = `${formatTime12h(schedule.openTime)} – ${formatTime12h(schedule.closeTime)}`;
+        
+        if (currentGroup && currentGroup.hours === hoursString) {
+          currentGroup.endDay = dayKey;
+        } else {
+          if (currentGroup) {
+            groups.push(currentGroup);
+          }
+          currentGroup = {
+            startDay: dayKey,
+            endDay: dayKey,
+            hours: hoursString
+          };
+        }
+      } else {
+        if (currentGroup) {
+          groups.push(currentGroup);
+          currentGroup = null;
+        }
+      }
+    });
+
+    if (currentGroup) {
+      groups.push(currentGroup);
+    }
+
+    return groups;
+  };
+
+  const groupedSchedule = getGroupedSchedule();
+  const hasOpenDays = groupedSchedule.length > 0;
+
   return (
     <section id="contact" className="py-24 bg-dark-gray border-t border-white/5 relative overflow-hidden">
       {/* Glow overlay */}
@@ -100,28 +202,45 @@ export default function LocationContact() {
               <div className="h-px bg-white/10 w-full" />
               
               <div className="space-y-6 font-sans">
-                <div className="space-y-1">
-                  <span className="block text-xs uppercase tracking-wider font-bold text-primary">
-                    {AVAILABILITY.weekdays.days}
-                  </span>
-                  <span className="block text-2xl font-extrabold text-white">
-                    {AVAILABILITY.weekdays.hours}
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="block text-xs uppercase tracking-wider font-bold text-secondary">
-                    {AVAILABILITY.weekends.days}
-                  </span>
-                  <span className="block text-2xl font-extrabold text-white">
-                    {AVAILABILITY.weekends.hours}
-                  </span>
-                </div>
+                {availability ? (
+                  hasOpenDays ? (
+                    groupedSchedule.map((group, idx) => (
+                      <div key={idx} className="space-y-1">
+                        <span className={`block text-xs uppercase tracking-wider font-bold ${idx % 2 === 0 ? "text-primary" : "text-secondary"}`}>
+                          {group.startDay === group.endDay 
+                            ? DAY_LABELS[group.startDay] 
+                            : `${DAY_LABELS[group.startDay]} – ${DAY_LABELS[group.endDay]}`}
+                        </span>
+                        <span className="block text-2xl font-extrabold text-white">
+                          {group.hours}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-lg font-bold text-red-400 py-4">
+                      Currently closed — please contact the studio for availability.
+                    </div>
+                  )
+                ) : (
+                  // Frontend skeleton while loading or fallback if API fails
+                  <>
+                    <div className="space-y-1 animate-pulse">
+                      <span className="block h-4 bg-white/10 rounded w-1/3 mb-2" />
+                      <span className="block h-8 bg-white/10 rounded w-2/3" />
+                    </div>
+                    <div className="space-y-1 animate-pulse">
+                      <span className="block h-4 bg-white/10 rounded w-1/3 mb-2" />
+                      <span className="block h-8 bg-white/10 rounded w-2/3" />
+                    </div>
+                  </>
+                )}
               </div>
 
-              <div className="pt-4 text-xs text-light-gray/40 leading-relaxed uppercase tracking-wider font-semibold">
-                * APPOINTMENTS OUTSIDE CORE HOURS ARE SUBJECT TO SPECIAL REQUEST.
-              </div>
+              {availability && availability.note && (
+                <div className="pt-4 text-xs text-light-gray/40 leading-relaxed uppercase tracking-wider font-semibold">
+                  * {availability.note}
+                </div>
+              )}
             </div>
           </div>
 

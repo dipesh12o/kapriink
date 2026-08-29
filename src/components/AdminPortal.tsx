@@ -10,7 +10,8 @@ import {
   Check, 
   AlertCircle, 
   Loader2, 
-  ArrowLeft 
+  ArrowLeft,
+  Clock
 } from "lucide-react";
 
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
@@ -53,6 +54,21 @@ export default function AdminPortal() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  // Studio Availability Management State
+  const [days, setDays] = useState<Record<string, { isOpen: boolean; openTime: string; closeTime: string }>>({
+    monday: { isOpen: true, openTime: "15:00", closeTime: "20:00" },
+    tuesday: { isOpen: true, openTime: "15:00", closeTime: "20:00" },
+    wednesday: { isOpen: true, openTime: "15:00", closeTime: "20:00" },
+    thursday: { isOpen: true, openTime: "15:00", closeTime: "20:00" },
+    friday: { isOpen: true, openTime: "15:00", closeTime: "20:00" },
+    saturday: { isOpen: true, openTime: "10:00", closeTime: "19:00" },
+    sunday: { isOpen: true, openTime: "10:00", closeTime: "19:00" }
+  });
+  const [note, setNote] = useState("");
+  const [availLoading, setAvailLoading] = useState(false);
+  const [availSuccess, setAvailSuccess] = useState("");
+  const [availError, setAvailError] = useState("");
 
   // CRUD State
   const [tattoos, setTattoos] = useState<WebTattoo[]>([]);
@@ -113,6 +129,20 @@ export default function AdminPortal() {
     }
   }, [getFriendlyErrorMessage]);
 
+  // Fetch Studio Availability from Database
+  const fetchAvailability = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/availability`);
+      if (res.ok) {
+        const data = await res.json();
+        setDays(data.days);
+        setNote(data.note || "");
+      }
+    } catch (err) {
+      console.error("Failed to fetch availability:", err);
+    }
+  }, []);
+
   // Handle Authentication Session State
   useEffect(() => {
     const checkSession = async () => {
@@ -125,8 +155,9 @@ export default function AdminPortal() {
         if (res.ok) {
           const data = await res.json();
           setSession(data);
-          setIsAdmin(data.role === "admin");
+          setIsAdmin(data.role === "admin" || data.role === "editor");
           fetchTattoos();
+          fetchAvailability();
         } else {
           setSession(null);
           setIsAdmin(null);
@@ -140,7 +171,7 @@ export default function AdminPortal() {
     };
 
     checkSession();
-  }, [fetchTattoos]);
+  }, [fetchTattoos, fetchAvailability]);
 
   // Verify setup/reset tokens on landing page
   useEffect(() => {
@@ -196,8 +227,9 @@ export default function AdminPortal() {
       }
 
       setSession(data);
-      setIsAdmin(data.role === "admin");
+      setIsAdmin(data.role === "admin" || data.role === "editor");
       fetchTattoos();
+      fetchAvailability();
     } catch (err: any) {
       setAuthError(getFriendlyErrorMessage(err.message));
     } finally {
@@ -322,6 +354,77 @@ export default function AdminPortal() {
       setIsAdmin(null);
       setTattoos([]);
       window.history.pushState({}, "", "/admin");
+    }
+  };
+
+  // Studio Availability Operations
+  const handleToggleDay = (dayKey: string, isOpen: boolean) => {
+    setDays((prev) => ({
+      ...prev,
+      [dayKey]: {
+        ...prev[dayKey],
+        isOpen
+      }
+    }));
+  };
+
+  const handleTimeChange = (dayKey: string, type: "openTime" | "closeTime", value: string) => {
+    setDays((prev) => ({
+      ...prev,
+      [dayKey]: {
+        ...prev[dayKey],
+        [type]: value
+      }
+    }));
+  };
+
+  const handleSaveAvailability = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAvailLoading(true);
+    setAvailError("");
+    setAvailSuccess("");
+
+    // Validate schedules
+    const dayNames = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+    for (const d of dayNames) {
+      const schedule = days[d];
+      if (schedule.isOpen) {
+        if (!schedule.openTime || !schedule.closeTime) {
+          setAvailError(`Opening and closing times are required for ${d.charAt(0).toUpperCase() + d.slice(1)}.`);
+          setAvailLoading(false);
+          return;
+        }
+
+        const [openHour, openMin] = schedule.openTime.split(":").map(Number);
+        const [closeHour, closeMin] = schedule.closeTime.split(":").map(Number);
+        const openVal = openHour * 60 + openMin;
+        const closeVal = closeHour * 60 + closeMin;
+
+        if (closeVal <= openVal) {
+          setAvailError(`Closing time must be later than opening time for ${d.charAt(0).toUpperCase() + d.slice(1)}.`);
+          setAvailLoading(false);
+          return;
+        }
+      }
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/availability`, {
+        method: "PUT",
+        headers: getAuthHeaders(true),
+        body: JSON.stringify({ days, note })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to update availability.");
+      }
+
+      setAvailSuccess("Studio availability updated successfully.");
+    } catch (err: any) {
+      setAvailError(err.message || "Failed to save availability.");
+    } finally {
+      setAvailLoading(false);
     }
   };
 
@@ -846,6 +949,123 @@ export default function AdminPortal() {
                       <Plus className="h-4 w-4" />
                       Add to Gallery
                     </>
+                  )}
+                </button>
+              </form>
+            </div>
+
+            {/* Studio Availability Section */}
+            <div className="bg-dark-gray border border-white/5 p-6 rounded-lg space-y-6">
+              <div className="space-y-1 text-left">
+                <h2 className="text-xl font-display font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-secondary" />
+                  Studio Availability
+                </h2>
+                <p className="text-light-gray/60 text-[10px] uppercase tracking-wider font-bold">
+                  Set your weekly studio hours. These will appear automatically on your website.
+                </p>
+              </div>
+
+              <form onSubmit={handleSaveAvailability} className="space-y-5">
+                {availError && (
+                  <div className="flex items-center gap-2 p-4 bg-red-950/20 border border-red-500/30 rounded text-red-400 text-sm">
+                    <AlertCircle className="h-5 w-5 shrink-0" />
+                    <span>{availError}</span>
+                  </div>
+                )}
+                {availSuccess && (
+                  <div className="flex items-center gap-2 p-4 bg-green-950/20 border border-green-500/30 rounded text-green-400 text-sm">
+                    <Check className="h-5 w-5 shrink-0" />
+                    <span>{availSuccess}</span>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((dayKey) => {
+                    const schedule = days[dayKey] || { isOpen: true, openTime: "15:00", closeTime: "20:00" };
+                    const dayLabels: Record<string, string> = {
+                      monday: "Monday",
+                      tuesday: "Tuesday",
+                      wednesday: "Wednesday",
+                      thursday: "Thursday",
+                      friday: "Friday",
+                      saturday: "Saturday",
+                      sunday: "Sunday"
+                    };
+
+                    return (
+                      <div key={dayKey} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-dark border border-white/5 rounded gap-3">
+                        <div className="flex items-center justify-between sm:justify-start gap-4">
+                          <span className="text-xs font-display font-extrabold text-white uppercase tracking-widest w-24 text-left">
+                            {dayLabels[dayKey]}
+                          </span>
+                          <label className="relative inline-flex items-center cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={schedule.isOpen}
+                              onChange={(e) => handleToggleDay(dayKey, e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-light-gray after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                            <span className="ms-2.5 text-xs font-bold uppercase tracking-wider text-white">
+                              {schedule.isOpen ? "Open" : "Closed"}
+                            </span>
+                          </label>
+                        </div>
+                        
+                        {schedule.isOpen ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="time"
+                              required
+                              value={schedule.openTime}
+                              onChange={(e) => handleTimeChange(dayKey, "openTime", e.target.value)}
+                              className="bg-dark border border-white/10 rounded py-1.5 px-3 text-white focus:outline-none focus:border-primary text-xs w-28 uppercase tracking-widest font-bold"
+                            />
+                            <span className="text-white/30 text-xs">→</span>
+                            <input
+                              type="time"
+                              required
+                              value={schedule.closeTime}
+                              onChange={(e) => handleTimeChange(dayKey, "closeTime", e.target.value)}
+                              className="bg-dark border border-white/10 rounded py-1.5 px-3 text-white focus:outline-none focus:border-primary text-xs w-28 uppercase tracking-widest font-bold"
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-xs text-light-gray/30 uppercase tracking-widest font-bold sm:pr-8">
+                            Closed
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-1 text-left">
+                  <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                    Availability Note
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="e.g. Appointments outside core hours are subject to special request."
+                    className="w-full bg-dark border border-white/10 rounded-md py-2.5 px-3 text-white focus:outline-none focus:border-secondary transition-colors text-sm leading-relaxed"
+                  />
+                  <p className="text-[10px] text-light-gray/30 mt-1 uppercase tracking-wider font-semibold">
+                    These hours are shown publicly on your website. You can update them anytime.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={availLoading}
+                  className="w-full py-3 bg-secondary text-white font-bold uppercase tracking-wider rounded-md hover:bg-secondary/80 focus:outline-none transition-colors flex justify-center items-center gap-2 text-sm cursor-pointer font-sans"
+                >
+                  {availLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    "Save Availability"
                   )}
                 </button>
               </form>

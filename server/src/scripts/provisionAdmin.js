@@ -27,6 +27,8 @@ const provision = async () => {
     const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
     const expiry = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
+    const role = process.argv[3] || "admin";
+
     let admin = await Admin.findOne({ email });
 
     if (admin) {
@@ -34,14 +36,17 @@ const provision = async () => {
       admin.setupTokenHash = hashedToken;
       admin.setupTokenExpiry = expiry;
       admin.passwordHash = null; // Clear password if resetting account
+      if (process.argv[3]) {
+        admin.role = role;
+      }
       await admin.save();
     } else {
-      console.log(`Creating new admin account for '${email}'...`);
+      console.log(`Creating new admin account for '${email}' with role '${role}'...`);
       admin = new Admin({
         email,
         setupTokenHash: hashedToken,
         setupTokenExpiry: expiry,
-        role: "admin"
+        role: role
       });
       await admin.save();
     }
