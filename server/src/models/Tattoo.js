@@ -11,9 +11,20 @@ const tattooSchema = new mongoose.Schema(
       type: [String],
       required: true
     },
+    // Legacy MongoDB GridFS pointer (for backward compatibility)
     imageFileId: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true
+      default: null
+    },
+    // Cloudinary secure image URL
+    imageUrl: {
+      type: String,
+      default: null
+    },
+    // Cloudinary public asset ID
+    imagePublicId: {
+      type: String,
+      default: null
     }
   },
   {

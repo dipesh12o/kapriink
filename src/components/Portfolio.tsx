@@ -26,7 +26,7 @@ export default function Portfolio() {
         if (data && data.length > 0) {
           const mappedData: PortfolioItem[] = data.map((item: any) => ({
             id: item._id,
-            src: `${API_URL}/api/tattoos/image/${item.imageFileId}`,
+            src: item.imageUrl || `${API_URL}/api/tattoos/image/${item.imageFileId}`,
             alt: item.title,
             categories: item.category,
           }));

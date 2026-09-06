@@ -22,7 +22,9 @@ interface WebTattoo {
   src: string;
   alt: string;
   categories: string[];
-  imageFileId: string;
+  imageFileId?: string;
+  imageUrl?: string;
+  imagePublicId?: string;
 }
 
 export default function AdminPortal() {
@@ -116,10 +118,12 @@ export default function AdminPortal() {
       const data = await res.json();
       const mapped: WebTattoo[] = data.map((item: any) => ({
         id: item._id,
-        src: `${API_URL}/api/tattoos/image/${item.imageFileId}`,
+        src: item.imageUrl || `${API_URL}/api/tattoos/image/${item.imageFileId}`,
         alt: item.title,
         categories: item.category,
-        imageFileId: item.imageFileId
+        imageFileId: item.imageFileId,
+        imageUrl: item.imageUrl,
+        imagePublicId: item.imagePublicId
       }));
       setTattoos(mapped);
     } catch (err: any) {

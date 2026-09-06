@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Tattoo = require("../models/Tattoo");
 const { getGFSBucket } = require("../config/db");
+const { uploadToCloudinary, deleteFromCloudinary } = require("../config/cloudinary");
 
 const getAllTattoos = async (req, res) => {
   try {
@@ -12,6 +13,7 @@ const getAllTattoos = async (req, res) => {
   }
 };
 
+// Legacy endpoint for serving GridFS stored images
 const getTattooImage = async (req, res) => {
   const { fileId } = req.params;
 
@@ -80,44 +82,28 @@ const uploadTattoo = async (req, res) => {
     return res.status(400).json({ message: "At least one category is required." });
   }
 
+  let cloudResult;
   try {
-    const bucket = getGFSBucket();
-    
-    // Open upload stream to GridFS
-    const uploadStream = bucket.openUploadStream(req.file.originalname, {
-      contentType: req.file.mimetype
+    // 1. Upload file buffer to Cloudinary
+    cloudResult = await uploadToCloudinary(req.file.buffer);
+
+    // 2. Save tattoo metadata record to MongoDB
+    const tattoo = new Tattoo({
+      title,
+      category,
+      imageUrl: cloudResult.secure_url,
+      imagePublicId: cloudResult.public_id
     });
 
-    uploadStream.on("error", (err) => {
-      console.error("GridFS upload stream error:", err.message);
-      res.status(500).json({ message: "Failed to store image in database." });
-    });
-
-    uploadStream.on("finish", async () => {
-      try {
-        // Create Tattoo document
-        const tattoo = new Tattoo({
-          title,
-          category,
-          imageFileId: uploadStream.id
-        });
-
-        await tattoo.save();
-        res.status(201).json(tattoo);
-      } catch (err) {
-        // Cleanup GridFS file if document fails to save
-        await bucket.delete(uploadStream.id).catch(() => {});
-        console.error("Save tattoo error:", err.message);
-        res.status(500).json({ message: "Failed to save tattoo metadata." });
-      }
-    });
-
-    // Write file buffer to GridFS stream
-    uploadStream.write(req.file.buffer);
-    uploadStream.end();
+    await tattoo.save();
+    res.status(201).json(tattoo);
   } catch (error) {
     console.error("Upload tattoo error:", error.message);
-    res.status(500).json({ message: "Server error during upload." });
+    // Cleanup newly uploaded Cloudinary image if DB save failed
+    if (cloudResult && cloudResult.public_id) {
+      await deleteFromCloudinary(cloudResult.public_id).catch(() => {});
+    }
+    res.status(500).json({ message: "Failed to upload tattoo image to Cloudinary." });
   }
 };
 
@@ -170,52 +156,51 @@ const replaceTattooImage = async (req, res) => {
     return res.status(400).json({ message: "Only JPEG, PNG, WEBP, and GIF images are allowed." });
   }
 
+  let tattoo;
   try {
-    const tattoo = await Tattoo.findById(id);
+    tattoo = await Tattoo.findById(id);
     if (!tattoo) {
       return res.status(404).json({ message: "Tattoo not found." });
     }
+  } catch (error) {
+    return res.status(500).json({ message: "Server error looking up tattoo record." });
+  }
 
-    const bucket = getGFSBucket();
-    const oldFileId = tattoo.imageFileId;
+  const oldPublicId = tattoo.imagePublicId;
+  const oldFileId = tattoo.imageFileId;
 
-    // Upload new image to GridFS
-    const uploadStream = bucket.openUploadStream(req.file.originalname, {
-      contentType: req.file.mimetype
-    });
+  let cloudResult;
+  try {
+    // 1. Upload new image to Cloudinary FIRST
+    cloudResult = await uploadToCloudinary(req.file.buffer);
 
-    uploadStream.on("error", (err) => {
-      console.error("Replace stream error:", err.message);
-      res.status(500).json({ message: "Failed to store replacement image." });
-    });
+    // 2. Update document pointers
+    tattoo.imageUrl = cloudResult.secure_url;
+    tattoo.imagePublicId = cloudResult.public_id;
+    tattoo.imageFileId = null; // Disconnect old GridFS pointer if replacing legacy image
 
-    uploadStream.on("finish", async () => {
-      try {
-        // Update document pointer
-        tattoo.imageFileId = uploadStream.id;
-        await tattoo.save();
+    await tattoo.save();
 
-        // Delete old image asynchronously
-        if (oldFileId) {
-          await bucket.delete(new mongoose.Types.ObjectId(oldFileId)).catch((e) => {
-            console.warn(`Failed to cleanup old image ${oldFileId}:`, e.message);
-          });
-        }
+    // 3. Clean up previous asset asynchronously after DB save success
+    if (oldPublicId) {
+      deleteFromCloudinary(oldPublicId).catch((e) => {
+        console.warn(`Failed to cleanup old Cloudinary image '${oldPublicId}':`, e.message);
+      });
+    } else if (oldFileId) {
+      const bucket = getGFSBucket();
+      bucket.delete(new mongoose.Types.ObjectId(oldFileId)).catch((e) => {
+        console.warn(`Failed to cleanup legacy GridFS image '${oldFileId}':`, e.message);
+      });
+    }
 
-        res.json(tattoo);
-      } catch (err) {
-        // Clean up new upload if save failed
-        await bucket.delete(uploadStream.id).catch(() => {});
-        console.error("Replace save error:", err.message);
-        res.status(500).json({ message: "Failed to update image link." });
-      }
-    });
-
-    uploadStream.write(req.file.buffer);
-    uploadStream.end();
+    res.json(tattoo);
   } catch (error) {
     console.error("Replace image error:", error.message);
-    res.status(500).json({ message: "Server error replacing image." });
+    // Cleanup new Cloudinary asset if DB update failed
+    if (cloudResult && cloudResult.public_id) {
+      await deleteFromCloudinary(cloudResult.public_id).catch(() => {});
+    }
+    res.status(500).json({ message: "Failed to replace tattoo image." });
   }
 };
 
@@ -228,16 +213,22 @@ const deleteTattoo = async (req, res) => {
       return res.status(404).json({ message: "Tattoo not found." });
     }
 
-    const bucket = getGFSBucket();
-
-    // 1. Delete image file from GridFS
-    if (tattoo.imageFileId) {
-      await bucket.delete(new mongoose.Types.ObjectId(tattoo.imageFileId)).catch((err) => {
-        console.warn(`GridFS deletion warning for ${tattoo.imageFileId}:`, err.message);
+    // 1. Delete image asset from Cloudinary (if present)
+    if (tattoo.imagePublicId) {
+      await deleteFromCloudinary(tattoo.imagePublicId).catch((err) => {
+        console.warn(`Cloudinary asset deletion warning for '${tattoo.imagePublicId}':`, err.message);
       });
     }
 
-    // 2. Delete metadata row in MongoDB
+    // 2. Delete legacy GridFS file (if present)
+    if (tattoo.imageFileId) {
+      const bucket = getGFSBucket();
+      await bucket.delete(new mongoose.Types.ObjectId(tattoo.imageFileId)).catch((err) => {
+        console.warn(`GridFS file deletion warning for '${tattoo.imageFileId}':`, err.message);
+      });
+    }
+
+    // 3. Delete metadata document in MongoDB
     await Tattoo.findByIdAndDelete(id);
 
     res.json({ message: "Tattoo deleted successfully." });
