@@ -13,6 +13,8 @@ import {
   X, 
   User, 
   Mail, 
+  Phone,
+  MapPin,
   Tag, 
   Award
 } from "lucide-react";
@@ -65,20 +67,26 @@ export default function PaintingDetails({ paintingId, onBack }: PaintingDetailsP
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [now, setNow] = useState<Date>(new Date());
 
-  // Bidder authentication state
-  const [bidderToken, setBidderToken] = useState<string>(() => localStorage.getItem("kaprink_bidder_token") || "");
-  const [bidderEmail, setBidderEmail] = useState<string>(() => localStorage.getItem("kaprink_bidder_email") || "");
-  const [bidderName, setBidderName] = useState<string>(() => localStorage.getItem("kaprink_bidder_name") || "");
+  // Bidder authentication state (sessionStorage for session persistence without sensitive data in localStorage)
+  const [bidderToken, setBidderToken] = useState<string>(() => sessionStorage.getItem("kaprink_bidder_token") || "");
+  const [bidderEmail, setBidderEmail] = useState<string>(() => sessionStorage.getItem("kaprink_bidder_email") || "");
+  const [bidderName, setBidderName] = useState<string>(() => sessionStorage.getItem("kaprink_bidder_name") || "");
 
-  // Verification request form state
+  // Registration form state (4 required fields: Full Name, Email, Mobile Number, Address)
   const [reqName, setReqName] = useState("");
   const [reqEmail, setReqEmail] = useState("");
-  const [verificationSent, setVerificationSent] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
+  const [reqPhone, setReqPhone] = useState("");
+  const [reqAddress, setReqAddress] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
-  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
+
+  // Clear any legacy sensitive keys from localStorage
+  useEffect(() => {
+    localStorage.removeItem("kaprink_bidder_token");
+    localStorage.removeItem("kaprink_bidder_email");
+    localStorage.removeItem("kaprink_bidder_name");
+  }, []);
 
   // Bidding form state
   const [bidAmount, setBidAmount] = useState<string>("");
@@ -191,95 +199,109 @@ export default function PaintingDetails({ paintingId, onBack }: PaintingDetailsP
     };
   }, [paintingId]);
 
-  // Handle Request Email Verification Code
-  const handleRequestVerification = async (e: React.FormEvent) => {
+  // Handle Register Guest Bidder (4 required fields: Full Name, Email, Mobile Number, Address)
+  const handleRegisterBidder = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuthLoading(true);
+
+    // Prevent duplicate submissions while in progress
+    if (authLoading) return;
+
     setAuthError(null);
     setAuthSuccess(null);
-    setDevOtpHint(null);
 
-    try {
-      const res = await safeFetchJson(
-        `${API_URL}/api/auctions/request-verification`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: reqEmail, name: reqName })
-        },
-        "/api/auctions/request-verification"
-      );
+    const trimmedName = reqName.trim();
+    const trimmedEmail = reqEmail.trim().toLowerCase();
+    const trimmedPhone = reqPhone.trim();
+    const trimmedAddress = reqAddress.trim();
 
-      if (!res.ok) {
-        throw new Error(res.error || "Failed to send verification code.");
-      }
-
-      setVerificationSent(true);
-      setAuthSuccess(res.data?.message || "Verification code sent to your email.");
-
-      // If developer/sandbox returned preview token
-      if (res.data?.devOtp) {
-        setDevOtpHint(res.data.devOtp);
-      }
-    } catch (err: any) {
-      setAuthError(err.message || "Could not request verification.");
-    } finally {
-      setAuthLoading(false);
+    // Field 1: Full Name
+    if (!trimmedName || trimmedName.length < 2 || trimmedName.length > 100) {
+      setAuthError("Please enter your full name (between 2 and 100 characters).");
+      return;
     }
-  };
 
-  // Handle Verify Code
-  const handleVerifyCode = async (e: React.FormEvent) => {
-    e.preventDefault();
+    // Field 2: Email Address
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      setAuthError("Please enter a valid email address.");
+      return;
+    }
+
+    // Field 3: Mobile Number
+    const digitsOnly = trimmedPhone.replace(/\D/g, "");
+    if (!trimmedPhone || digitsOnly.length < 7 || trimmedPhone.length > 30) {
+      setAuthError("Please enter a valid mobile number (at least 7 digits).");
+      return;
+    }
+
+    // Field 4: Address
+    if (!trimmedAddress || trimmedAddress.length < 5 || trimmedAddress.length > 300) {
+      setAuthError("Please enter your complete address (between 5 and 300 characters).");
+      return;
+    }
+
     setAuthLoading(true);
-    setAuthError(null);
-    setAuthSuccess(null);
 
     try {
-      const res = await safeFetchJson(
-        `${API_URL}/api/auctions/verify-email`,
+      const res = await safeFetchJson<{
+        success: boolean;
+        message: string;
+        token?: string;
+        bidderToken?: string;
+        participant?: { name: string; email: string };
+      }>(
+        `${API_URL}/api/auctions/register-bidder`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: reqEmail, code: otpCode })
+          body: JSON.stringify({
+            name: trimmedName,
+            email: trimmedEmail,
+            phone: trimmedPhone,
+            address: trimmedAddress
+          })
         },
-        "/api/auctions/verify-email"
+        "/api/auctions/register-bidder"
       );
 
       if (!res.ok) {
-        throw new Error(res.error || "Invalid or expired verification code.");
+        throw new Error(res.error || "Failed to complete registration.");
       }
 
       const receivedToken = res.data?.token || res.data?.bidderToken;
-      const participant = res.data?.participant;
+      if (!receivedToken) {
+        throw new Error("Authorization token was not received from the server.");
+      }
 
-      // Store verified bidder credentials in localStorage
-      localStorage.setItem("kaprink_bidder_token", receivedToken);
-      localStorage.setItem("kaprink_bidder_email", participant?.email || reqEmail);
-      localStorage.setItem("kaprink_bidder_name", participant?.name || reqName);
+      // Store in memory & temporary sessionStorage only (do not store sensitive info in localStorage)
+      sessionStorage.setItem("kaprink_bidder_token", receivedToken);
+      sessionStorage.setItem("kaprink_bidder_email", res.data?.participant?.email || trimmedEmail);
+      sessionStorage.setItem("kaprink_bidder_name", res.data?.participant?.name || trimmedName);
 
       setBidderToken(receivedToken);
-      setBidderEmail(participant?.email || reqEmail);
-      setBidderName(participant?.name || reqName);
+      setBidderEmail(res.data?.participant?.email || trimmedEmail);
+      setBidderName(res.data?.participant?.name || trimmedName);
 
-      setAuthSuccess("Email verified successfully! You are now authorized to place bids.");
-      setVerificationSent(false);
+      setAuthSuccess(res.data?.message || "Registration successful! You are now authorized to place bids.");
     } catch (err: any) {
-      setAuthError(err.message || "Verification failed.");
+      setAuthError(err.message || "Could not complete registration.");
     } finally {
+      // Guaranteed to stop loading in ALL outcomes
       setAuthLoading(false);
     }
   };
 
   // Switch / Log out bidder
   const handleLogoutBidder = () => {
+    sessionStorage.removeItem("kaprink_bidder_token");
+    sessionStorage.removeItem("kaprink_bidder_email");
+    sessionStorage.removeItem("kaprink_bidder_name");
     localStorage.removeItem("kaprink_bidder_token");
     localStorage.removeItem("kaprink_bidder_email");
     localStorage.removeItem("kaprink_bidder_name");
     setBidderToken("");
     setBidderEmail("");
     setBidderName("");
-    setVerificationSent(false);
     setAuthSuccess(null);
     setAuthError(null);
   };
@@ -641,26 +663,16 @@ export default function PaintingDetails({ paintingId, onBack }: PaintingDetailsP
                       <Sparkles className="h-8 w-8 text-yellow-400 mx-auto" />
                       <p className="text-sm font-bold text-white uppercase tracking-wider">Bidding Opens Soon</p>
                       <p className="text-xs text-light-gray/70">
-                        This auction begins on {new Date(painting.startTime).toLocaleString()}. You can verify your email now to be ready.
+                        This auction begins on {new Date(painting.startTime).toLocaleString()}. You can register now to be ready to bid.
                       </p>
                     </>
                   )}
                 </div>
               )}
 
-              {/* 2. Email Verification Flow (if not verified or user wants to verify early) */}
+              {/* 2. Guest Bidder Registration Flow (4 required fields: Full Name, Email, Mobile Number, Address) */}
               {!bidderToken ? (
                 <div className="space-y-4">
-                  <div className="p-4 bg-secondary/5 border border-secondary/20 rounded-md space-y-1">
-                    <p className="text-xs font-bold uppercase tracking-wider text-secondary flex items-center gap-1.5">
-                      <ShieldCheck className="h-4 w-4" />
-                      Secure Email Verification Required
-                    </p>
-                    <p className="text-xs text-light-gray/70">
-                      No password required. Enter your email to receive a secure one-time verification code to bid.
-                    </p>
-                  </div>
-
                   {authError && (
                     <div className="flex items-center gap-2 p-3 bg-red-950/20 border border-red-500/30 rounded text-red-400 text-xs">
                       <AlertCircle className="h-4 w-4 shrink-0" />
@@ -675,100 +687,98 @@ export default function PaintingDetails({ paintingId, onBack }: PaintingDetailsP
                     </div>
                   )}
 
-                  {devOtpHint && (
-                    <div className="p-3 bg-yellow-950/20 border border-yellow-500/30 rounded text-yellow-300 text-xs space-y-1">
-                      <p className="font-bold uppercase tracking-wider">Development Sandbox Mode Active</p>
-                      <p>Your one-time verification code is: <span className="font-mono font-bold text-white text-sm bg-black/40 px-2 py-0.5 rounded">{devOtpHint}</span></p>
-                    </div>
-                  )}
-
-                  {!verificationSent ? (
-                    <form onSubmit={handleRequestVerification} className="space-y-3">
-                      <div>
-                        <label className="text-[10px] uppercase tracking-widest font-bold text-white/50 block mb-1">
-                          Your Full Name
-                        </label>
-                        <div className="relative">
-                          <User className="absolute left-3 top-3 h-4 w-4 text-white/30" />
-                          <input
-                            type="text"
-                            required
-                            placeholder="e.g. Alexis Vance"
-                            value={reqName}
-                            onChange={(e) => setReqName(e.target.value)}
-                            className="w-full bg-dark border border-white/10 rounded-md py-2.5 pl-9 pr-3 text-white text-xs focus:outline-none focus:border-secondary"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] uppercase tracking-widest font-bold text-white/50 block mb-1">
-                          Your Email Address
-                        </label>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-3 h-4 w-4 text-white/30" />
-                          <input
-                            type="email"
-                            required
-                            placeholder="alexis@example.com"
-                            value={reqEmail}
-                            onChange={(e) => setReqEmail(e.target.value)}
-                            className="w-full bg-dark border border-white/10 rounded-md py-2.5 pl-9 pr-3 text-white text-xs focus:outline-none focus:border-secondary"
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={authLoading}
-                        className="w-full py-2.5 bg-secondary text-dark font-bold uppercase tracking-wider rounded-md hover:neon-pink-border-glow transition-all flex items-center justify-center gap-2 text-xs"
-                      >
-                        {authLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          "Send Verification Code"
-                        )}
-                      </button>
-                    </form>
-                  ) : (
-                    <form onSubmit={handleVerifyCode} className="space-y-3">
-                      <div>
-                        <label className="text-[10px] uppercase tracking-widest font-bold text-white/50 block mb-1">
-                          Enter 6-Digit Code sent to {reqEmail}
-                        </label>
+                  <form onSubmit={handleRegisterBidder} className="space-y-3">
+                    {/* 1. Full Name — required */}
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/50 block mb-1">
+                        Full Name *
+                      </label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-3 h-4 w-4 text-white/30" />
                         <input
                           type="text"
                           required
-                          maxLength={6}
-                          placeholder="123456"
-                          value={otpCode}
-                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                          className="w-full bg-dark border border-white/10 rounded-md py-2.5 px-3 text-center font-mono text-lg font-bold tracking-widest text-secondary focus:outline-none focus:border-secondary"
+                          disabled={authLoading}
+                          placeholder="e.g. Alexis Vance"
+                          value={reqName}
+                          onChange={(e) => setReqName(e.target.value)}
+                          className="w-full bg-dark border border-white/10 rounded-md py-2.5 pl-9 pr-3 text-white text-xs focus:outline-none focus:border-secondary transition-colors disabled:opacity-50"
                         />
                       </div>
+                    </div>
 
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setVerificationSent(false)}
-                          className="w-1/3 py-2.5 bg-white/5 border border-white/10 text-white rounded-md text-xs font-bold uppercase hover:bg-white/10 transition-colors"
-                        >
-                          Back
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={authLoading || otpCode.length !== 6}
-                          className="w-2/3 py-2.5 bg-secondary text-dark font-bold uppercase tracking-wider rounded-md hover:neon-pink-border-glow transition-all flex items-center justify-center gap-2 text-xs"
-                        >
-                          {authLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            "Verify & Authorize"
-                          )}
-                        </button>
+                    {/* 2. Email Address — required */}
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/50 block mb-1">
+                        Email Address *
+                      </label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-3 h-4 w-4 text-white/30" />
+                        <input
+                          type="email"
+                          required
+                          disabled={authLoading}
+                          placeholder="alexis@example.com"
+                          value={reqEmail}
+                          onChange={(e) => setReqEmail(e.target.value)}
+                          className="w-full bg-dark border border-white/10 rounded-md py-2.5 pl-9 pr-3 text-white text-xs focus:outline-none focus:border-secondary transition-colors disabled:opacity-50"
+                        />
                       </div>
-                    </form>
-                  )}
+                    </div>
+
+                    {/* 3. Mobile Number — required */}
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/50 block mb-1">
+                        Mobile Number *
+                      </label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-3 h-4 w-4 text-white/30" />
+                        <input
+                          type="tel"
+                          required
+                          disabled={authLoading}
+                          placeholder="e.g. +1 (555) 234-5678"
+                          value={reqPhone}
+                          onChange={(e) => setReqPhone(e.target.value)}
+                          className="w-full bg-dark border border-white/10 rounded-md py-2.5 pl-9 pr-3 text-white text-xs focus:outline-none focus:border-secondary transition-colors disabled:opacity-50"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 4. Address — required */}
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/50 block mb-1">
+                        Address *
+                      </label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-3 h-4 w-4 text-white/30" />
+                        <input
+                          type="text"
+                          required
+                          disabled={authLoading}
+                          placeholder="e.g. 123 Studio Way, Apt 4B, New York, NY 10001"
+                          value={reqAddress}
+                          onChange={(e) => setReqAddress(e.target.value)}
+                          className="w-full bg-dark border border-white/10 rounded-md py-2.5 pl-9 pr-3 text-white text-xs focus:outline-none focus:border-secondary transition-colors disabled:opacity-50"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={authLoading}
+                      className="w-full py-2.5 bg-secondary text-dark font-bold uppercase tracking-wider rounded-md hover:neon-pink-border-glow disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 text-xs"
+                    >
+                      {authLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Registering...</span>
+                        </>
+                      ) : (
+                        "Register to Bid"
+                      )}
+                    </button>
+                  </form>
                 </div>
               ) : (
                 /* 3. Verified Bidder Session & Bidding Form */
@@ -778,10 +788,11 @@ export default function PaintingDetails({ paintingId, onBack }: PaintingDetailsP
                     <div className="flex items-center gap-2">
                       <ShieldCheck className="h-4 w-4 text-secondary shrink-0" />
                       <span className="text-light-gray truncate">
-                        Verified as: <strong className="text-white">{bidderName}</strong> ({bidderEmail})
+                        Registered Bidder: <strong className="text-white">{bidderName}</strong> ({bidderEmail})
                       </span>
                     </div>
                     <button
+                      type="button"
                       onClick={handleLogoutBidder}
                       className="text-[10px] text-light-gray/60 hover:text-red-400 uppercase tracking-wider font-semibold ml-2 underline"
                     >

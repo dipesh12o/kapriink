@@ -15,6 +15,18 @@ const auctionParticipantSchema = new mongoose.Schema(
       trim: true,
       maxlength: 100
     },
+    phone: {
+      type: String,
+      trim: true,
+      default: "",
+      maxlength: 30
+    },
+    address: {
+      type: String,
+      trim: true,
+      default: "",
+      maxlength: 300
+    },
     isVerified: {
       type: Boolean,
       default: false

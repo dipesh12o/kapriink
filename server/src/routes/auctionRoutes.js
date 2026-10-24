@@ -6,6 +6,7 @@ const {
   getPublicAuctions,
   getPublicAuctionById,
   getPublicAuctionBids,
+  registerBidder,
   requestVerification,
   verifyEmail,
   placeBid,
@@ -36,6 +37,7 @@ const publicRouter = express.Router();
 publicRouter.get("/", getPublicAuctions);
 publicRouter.get("/:id", getPublicAuctionById);
 publicRouter.get("/:id/bids", getPublicAuctionBids);
+publicRouter.post("/register-bidder", verificationLimiter, registerBidder);
 publicRouter.post("/request-verification", verificationLimiter, requestVerification);
 publicRouter.post("/verify-email", verifyEmail);
 publicRouter.post("/:id/bid", verifyBidder, bidLimiter, placeBid);

@@ -20,8 +20,13 @@ export async function safeFetchJson<T = any>(
   init?: RequestInit,
   endpointLabel?: string
 ): Promise<ApiResponse<T>> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const signal = init?.signal || controller.signal;
+
   try {
-    const res = await fetch(input, init);
+    const res = await fetch(input, { ...init, signal });
+    clearTimeout(timeoutId);
     const contentType = res.headers.get("content-type") || "";
     const isJson = contentType.includes("application/json");
 
@@ -64,6 +69,14 @@ export async function safeFetchJson<T = any>(
     const data: T = await res.json();
     return { ok: true, status: res.status, data };
   } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === "AbortError") {
+      return {
+        ok: false,
+        status: 408,
+        error: "Request timed out. The server took too long to respond. Please try again."
+      };
+    }
     const isNetworkError = err.message === "Failed to fetch" || err.name === "TypeError";
     const userFriendlyMessage = isNetworkError
       ? "Unable to connect to the backend server. Please verify your internet connection or check if the backend service is running."

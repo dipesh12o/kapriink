@@ -37,11 +37,11 @@ const createRateLimiter = ({ windowMs, max, message, keyGenerator }) => {
   };
 };
 
-// Verification rate limiter: max 3 requests per 5 minutes per email/IP
+// Verification & registration rate limiter: max 15 requests per 5 minutes per email/IP
 const verificationLimiter = createRateLimiter({
   windowMs: 5 * 60 * 1000,
-  max: 3,
-  message: "Too many verification requests. Please wait a few minutes before trying again.",
+  max: 15,
+  message: "Too many registration attempts. Please wait a few minutes before trying again.",
   keyGenerator: (req) => {
     const email = req.body && req.body.email ? String(req.body.email).trim().toLowerCase() : "";
     const ip = req.ip || req.headers["x-forwarded-for"] || "ip";

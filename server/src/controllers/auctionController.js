@@ -168,7 +168,97 @@ const getPublicAuctionBids = async (req, res) => {
   }
 };
 
+const registerBidder = async (req, res) => {
+  const { name, email, phone, address } = req.body;
+
+  if (!name || !email || !phone || !address) {
+    return res.status(400).json({ message: "Full name, email address, mobile number, and address are required." });
+  }
+
+  const trimmedName = String(name).trim();
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const trimmedPhone = String(phone).trim();
+  const trimmedAddress = String(address).trim();
+
+  // Validate Name
+  if (trimmedName.length < 2 || trimmedName.length > 100) {
+    return res.status(400).json({ message: "Full name must be between 2 and 100 characters." });
+  }
+
+  // Validate Email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalizedEmail)) {
+    return res.status(400).json({ message: "Please provide a valid email address." });
+  }
+
+  // Validate Phone
+  const digitsOnly = trimmedPhone.replace(/\D/g, "");
+  if (digitsOnly.length < 7 || trimmedPhone.length > 30) {
+    return res.status(400).json({ message: "Please provide a valid mobile number (at least 7 digits)." });
+  }
+
+  // Validate Address
+  if (trimmedAddress.length < 5 || trimmedAddress.length > 300) {
+    return res.status(400).json({ message: "Please provide a valid address (between 5 and 300 characters)." });
+  }
+
+  try {
+    let participant = await AuctionParticipant.findOne({ email: normalizedEmail });
+
+    if (!participant) {
+      participant = new AuctionParticipant({
+        name: trimmedName,
+        email: normalizedEmail,
+        phone: trimmedPhone,
+        address: trimmedAddress,
+        isVerified: true,
+        verifiedAt: new Date(),
+        lastVerificationRequestAt: new Date()
+      });
+      await participant.save();
+    } else {
+      participant.name = trimmedName;
+      participant.phone = trimmedPhone;
+      participant.address = trimmedAddress;
+      participant.isVerified = true;
+      if (!participant.verifiedAt) participant.verifiedAt = new Date();
+      participant.lastVerificationRequestAt = new Date();
+      await participant.save();
+    }
+
+    // Issue signed Bidder session JWT valid for 30 days
+    const bidderToken = jwt.sign(
+      {
+        participantId: participant._id,
+        email: participant.email,
+        v: participant.tokenVersion
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    res.json({
+      success: true,
+      message: "Registration successful! You are now authorized to place bids.",
+      token: bidderToken,
+      bidderToken,
+      participant: {
+        name: participant.name,
+        email: participant.email
+      }
+    });
+  } catch (err) {
+    console.error("registerBidder error:", err.message);
+    res.status(500).json({ message: "Server error during bidder registration. Please try again." });
+  }
+};
+
 const requestVerification = async (req, res) => {
+  // If phone & address provided, handle via registerBidder
+  if (req.body.phone && req.body.address) {
+    return registerBidder(req, res);
+  }
+
   const { email, name } = req.body;
 
   if (!email || !name) {
@@ -219,45 +309,7 @@ const requestVerification = async (req, res) => {
       await participant.save();
     }
 
-    // Attempt to dispatch email via Nodemailer
-    const clientUrl = process.env.CLIENT_URL || "https://kapriink.vercel.app";
-    const verifyUrl = `${clientUrl}/auctions/verify?token=${token}&email=${encodeURIComponent(normalizedEmail)}`;
-
-    try {
-      const transporter = getTransporter();
-      const mailOptions = {
-        from: `"KaprInk Tattoo Studio" <${process.env.EMAIL_USER || "noreply@kapriink.com"}>`,
-        to: normalizedEmail,
-        subject: "Verify your email for KaprInk Painting Auctions",
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #222; background: #0d0d0e; color: #f5f5f5; border-radius: 8px;">
-            <h2 style="color: #ff007f; margin-top: 0; text-transform: uppercase; letter-spacing: 2px;">KaprInk Art Auction</h2>
-            <p style="font-size: 15px; color: #ccc;">Hello ${trimmedName},</p>
-            <p style="font-size: 14px; color: #aaa; line-height: 1.6;">
-              You requested to participate in Jordynn's original painting auctions. Click the button below to verify your email address and place your bid.
-            </p>
-            <div style="margin: 28px 0;">
-              <a href="${verifyUrl}" style="background-color: #ff007f; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block; text-transform: uppercase; letter-spacing: 1.5px; font-size: 13px;">
-                Verify Email to Bid
-              </a>
-            </div>
-            <p style="color: #666; font-size: 12px; line-height: 1.5;">
-              This verification link is valid for 24 hours. If you did not request this verification, you can safely ignore this email.
-            </p>
-            <hr style="border: 0; border-top: 1px solid #222; margin: 24px 0;">
-            <p style="color: #555; font-size: 11px; word-break: break-all;">
-              Or copy and paste this verification code into the website: <strong style="color: #00f0ff;">${token}</strong>
-            </p>
-          </div>
-        `
-      };
-
-      await transporter.sendMail(mailOptions);
-    } catch (mailErr) {
-      console.warn("Nodemailer dispatch warning (SMTP credentials may be pending):", mailErr.message);
-      // Anti-enumeration: still return standard generic response
-    }
-
+    // Email dispatch temporarily bypassed to prevent SMTP connection hanging
     const responsePayload = { ...genericResponse };
     if (process.env.NODE_ENV !== "production") {
       responsePayload.devOtp = token;
@@ -935,6 +987,7 @@ module.exports = {
   getPublicAuctions,
   getPublicAuctionById,
   getPublicAuctionBids,
+  registerBidder,
   requestVerification,
   verifyEmail,
   placeBid,
