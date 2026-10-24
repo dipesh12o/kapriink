@@ -3,6 +3,8 @@ import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import Styles from "./components/Styles";
 import Portfolio from "./components/Portfolio";
+import Auctions from "./components/Auctions";
+import PaintingDetails from "./components/PaintingDetails";
 import About from "./components/About";
 import Booking from "./components/Booking";
 import LocationContact from "./components/LocationContact";
@@ -32,6 +34,29 @@ function App() {
     );
   }
 
+  // Check if the current route is a dedicated painting auction details page
+  const isAuctionDetailRoute = path.startsWith("/auctions/");
+  const auctionId = isAuctionDetailRoute ? path.replace("/auctions/", "").split("/")[0] : null;
+
+  if (isAuctionDetailRoute && auctionId) {
+    return (
+      <div className="relative min-h-screen bg-dark text-white selection:bg-primary selection:text-white antialiased">
+        <div className="noise-overlay" />
+        <Navbar />
+        <main className="pt-20">
+          <PaintingDetails
+            paintingId={auctionId}
+            onBack={() => {
+              window.history.pushState({}, "", "/#auctions");
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}
+          />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen bg-dark text-white selection:bg-primary selection:text-white antialiased">
       {/* Editorial SVG Noise Grain Overlay */}
@@ -50,6 +75,14 @@ function App() {
 
         {/* Gallery / Portfolio Section */}
         <Portfolio />
+
+        {/* Painting Auctions Section */}
+        <Auctions
+          onSelectPainting={(id) => {
+            window.history.pushState({}, "", `/auctions/${id}`);
+            window.dispatchEvent(new PopStateEvent("popstate"));
+          }}
+        />
 
         {/* Bio / About Jordynn Section */}
         <About />

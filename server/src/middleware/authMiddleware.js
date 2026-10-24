@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const Admin = require("../models/Admin");
+const AuctionParticipant = require("../models/AuctionParticipant");
 
 const protect = async (req, res, next) => {
   let token = req.cookies?.token;
@@ -53,4 +54,40 @@ const authorize = (...allowedRoles) => {
   };
 };
 
-module.exports = { protect, authorize };
+const verifyBidder = async (req, res, next) => {
+  let bidderToken = req.headers["x-bidder-token"] || req.body?.bidderToken;
+  if (!bidderToken && req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
+    bidderToken = req.headers.authorization.split(" ")[1];
+  }
+
+  if (!bidderToken) {
+    return res.status(401).json({ message: "Verification required: Please verify your email before placing a bid." });
+  }
+
+  try {
+    const decoded = jwt.verify(bidderToken, process.env.JWT_SECRET);
+    if (!decoded.participantId || !decoded.email) {
+      return res.status(401).json({ message: "Invalid bidder token format." });
+    }
+
+    const participant = await AuctionParticipant.findById(decoded.participantId);
+    if (!participant) {
+      return res.status(401).json({ message: "Bidder profile not found. Please verify your email." });
+    }
+
+    if (!participant.isVerified) {
+      return res.status(403).json({ message: "Email not verified. Please complete verification before bidding." });
+    }
+
+    if (decoded.v !== undefined && decoded.v !== participant.tokenVersion) {
+      return res.status(401).json({ message: "Bidder session expired. Please verify your email again." });
+    }
+
+    req.bidder = participant;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Invalid or expired bidder verification token." });
+  }
+};
+
+module.exports = { protect, authorize, verifyBidder };

@@ -4,6 +4,7 @@ const cookieParser = require("cookie-parser");
 const authRoutes = require("./routes/authRoutes");
 const tattooRoutes = require("./routes/tattooRoutes");
 const availabilityRoutes = require("./routes/availabilityRoutes");
+const { publicRouter: auctionRoutes, adminRouter: adminAuctionRoutes } = require("./routes/auctionRoutes");
 
 const app = express();
 
@@ -27,7 +28,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  allowedHeaders: ["Content-Type", "Authorization", "x-bidder-token"]
 };
 
 app.use(cors(corsOptions));
@@ -39,6 +40,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/tattoos", tattooRoutes);
 app.use("/api/availability", availabilityRoutes);
+app.use("/api/auctions", auctionRoutes);
+app.use("/api/admin/auctions", adminAuctionRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

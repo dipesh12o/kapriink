@@ -14,10 +14,14 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const isHomePage = typeof window !== "undefined" && window.location.pathname === "/";
+  const getLinkHref = (href: string) => (isHomePage ? href : `/${href}`);
+
   const navLinks = [
     { name: "Home", href: "#home" },
     { name: "Styles", href: "#styles" },
     { name: "Work", href: "#work" },
+    { name: "Auctions", href: "#auctions" },
     { name: "About", href: "#about" },
     { name: "Booking", href: "#booking" },
     { name: "Contact", href: "#contact" },
@@ -34,7 +38,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo Brand */}
-          <a href="#home" className="flex items-center gap-3 group">
+          <a href={getLinkHref("#home")} className="flex items-center gap-3 group">
             <img
               src={LOGOS.circular}
               alt="KaprInk Circular Logo"
@@ -50,7 +54,7 @@ export default function Navbar() {
             {navLinks.map((link) => (
               <a
                 key={link.name}
-                href={link.href}
+                href={getLinkHref(link.href)}
                 className="font-sans text-sm tracking-wider text-light-gray/80 hover:text-primary hover:neon-pink-glow transition-all duration-200 uppercase font-semibold"
               >
                 {link.name}
@@ -82,7 +86,7 @@ export default function Navbar() {
               </svg>
             </a>
             <a
-              href="#booking"
+              href={getLinkHref("#booking")}
               className="px-5 py-2 rounded-full bg-transparent border border-primary text-primary hover:bg-primary hover:text-white hover:neon-pink-border-glow transition-all duration-300 font-semibold tracking-wider text-xs uppercase"
             >
               Book Now
@@ -109,7 +113,7 @@ export default function Navbar() {
             {navLinks.map((link) => (
               <a
                 key={link.name}
-                href={link.href}
+                href={getLinkHref(link.href)}
                 onClick={() => setIsOpen(false)}
                 className="block text-lg font-semibold tracking-widest text-white hover:text-primary uppercase py-2 transition-colors"
               >
@@ -139,7 +143,7 @@ export default function Navbar() {
                 </svg>
               </a>
               <a
-                href="#booking"
+                href={getLinkHref("#booking")}
                 onClick={() => setIsOpen(false)}
                 className="w-2/3 text-center py-2.5 rounded-full bg-primary text-white neon-pink-border-glow font-bold tracking-widest text-sm uppercase"
               >

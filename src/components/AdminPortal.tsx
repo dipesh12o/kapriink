@@ -11,7 +11,14 @@ import {
   AlertCircle, 
   Loader2, 
   ArrowLeft,
-  Clock
+  Clock,
+  Eye,
+  Edit2,
+  Copy,
+  CheckCircle2,
+  Paintbrush,
+  Ban,
+  X
 } from "lucide-react";
 
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
@@ -25,6 +32,48 @@ interface WebTattoo {
   imageFileId?: string;
   imageUrl?: string;
   imagePublicId?: string;
+}
+
+// Custom interface for Admin Painting Auction Item
+interface AdminPainting {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  dimensions?: string;
+  medium?: string;
+  startingBid: number;
+  minBidIncrement: number;
+  startTime: string;
+  endTime: string;
+  isPublished: boolean;
+  status: "draft" | "upcoming" | "live" | "ended" | "sold" | "cancelled";
+  currentHighestBid: number;
+  bidCount: number;
+  isSaleConfirmed: boolean;
+  hasBids: boolean;
+  createdAt: string;
+}
+
+interface AdminBidDetail {
+  id: string;
+  amount: number;
+  bidder: {
+    name: string;
+    email: string;
+  };
+  createdAt: string;
+  status: string;
+}
+
+interface AdminAuctionWinner {
+  amount: number;
+  bidder: {
+    name: string;
+    email: string;
+  };
+  bidPlacedAt: string;
+  isSaleConfirmed: boolean;
 }
 
 export default function AdminPortal() {
@@ -81,6 +130,43 @@ export default function AdminPortal() {
   const [uploadProgress, setUploadProgress] = useState(false);
   const [crudError, setCrudError] = useState("");
   const [crudSuccess, setCrudSuccess] = useState("");
+
+  // Active Dashboard Tab
+  const [activeTab, setActiveTab] = useState<"tattoos" | "auctions">("tattoos");
+
+  // Auction Management State
+  const [paintings, setPaintings] = useState<AdminPainting[]>([]);
+  const [paintingsLoading, setPaintingsLoading] = useState(false);
+  const [auctionCrudError, setAuctionCrudError] = useState("");
+  const [auctionCrudSuccess, setAuctionCrudSuccess] = useState("");
+
+  // Painting Form State
+  const [pTitle, setPTitle] = useState("");
+  const [pDescription, setPDescription] = useState("");
+  const [pDimensions, setPDimensions] = useState("");
+  const [pMedium, setPMedium] = useState("");
+  const [pStartingBid, setPStartingBid] = useState("100");
+  const [pMinIncrement, setPMinIncrement] = useState("25");
+  const [pStartTime, setPStartTime] = useState(() => {
+    const now = new Date();
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  });
+  const [pEndTime, setPEndTime] = useState(() => {
+    const later = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    return new Date(later.getTime() - later.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  });
+  const [pIsPublished, setPIsPublished] = useState(true);
+  const [pPaintingFile, setPPaintingFile] = useState<File | null>(null);
+  const [editingPaintingId, setEditingPaintingId] = useState<string | null>(null);
+  const [pFormLoading, setPFormLoading] = useState(false);
+
+  // View Bids & Winner Modal State
+  const [selectedPaintingForBids, setSelectedPaintingForBids] = useState<AdminPainting | null>(null);
+  const [auctionBids, setAuctionBids] = useState<AdminBidDetail[]>([]);
+  const [auctionWinner, setAuctionWinner] = useState<AdminAuctionWinner | null>(null);
+  const [bidsModalLoading, setBidsModalLoading] = useState(false);
+  const [bidsModalError, setBidsModalError] = useState("");
+  const [copyFeedback, setCopyFeedback] = useState("");
 
   const categories = ["Abstract", "Dark Shading", "Fine Line", "Color"];
 
@@ -147,6 +233,249 @@ export default function AdminPortal() {
     }
   }, []);
 
+  // Fetch Paintings from Admin Endpoint
+  const fetchAdminPaintings = useCallback(async () => {
+    try {
+      setPaintingsLoading(true);
+      setAuctionCrudError("");
+      const res = await fetch(`${API_URL}/api/admin/auctions`, {
+        headers: getAuthHeaders(false),
+        credentials: "include"
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to load paintings.");
+      }
+      const data = await res.json();
+      setPaintings(data);
+    } catch (err: any) {
+      setAuctionCrudError("Failed to fetch paintings: " + getFriendlyErrorMessage(err.message));
+    } finally {
+      setPaintingsLoading(false);
+    }
+  }, [getAuthHeaders, getFriendlyErrorMessage]);
+
+  const resetPaintingForm = () => {
+    setEditingPaintingId(null);
+    setPTitle("");
+    setPDescription("");
+    setPDimensions("");
+    setPMedium("");
+    setPStartingBid("100");
+    setPMinIncrement("25");
+    const now = new Date();
+    setPStartTime(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    const later = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    setPEndTime(new Date(later.getTime() - later.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    setPIsPublished(true);
+    setPPaintingFile(null);
+    const input = document.getElementById("painting-file-input") as HTMLInputElement;
+    if (input) input.value = "";
+  };
+
+  const startEditPainting = (item: AdminPainting) => {
+    setEditingPaintingId(item.id);
+    setPTitle(item.title);
+    setPDescription(item.description);
+    setPDimensions(item.dimensions || "");
+    setPMedium(item.medium || "");
+    setPStartingBid(item.startingBid.toString());
+    setPMinIncrement(item.minBidIncrement.toString());
+    const sDate = new Date(item.startTime);
+    setPStartTime(new Date(sDate.getTime() - sDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    const eDate = new Date(item.endTime);
+    setPEndTime(new Date(eDate.getTime() - eDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    setPIsPublished(item.isPublished);
+    setPPaintingFile(null);
+    window.scrollTo({ top: 150, behavior: "smooth" });
+  };
+
+  const handleSavePainting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuctionCrudError("");
+    setAuctionCrudSuccess("");
+    setPFormLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("title", pTitle);
+      formData.append("description", pDescription);
+      if (pDimensions) formData.append("dimensions", pDimensions);
+      if (pMedium) formData.append("medium", pMedium);
+      formData.append("startingBid", pStartingBid);
+      formData.append("minBidIncrement", pMinIncrement);
+      formData.append("startTime", new Date(pStartTime).toISOString());
+      formData.append("endTime", new Date(pEndTime).toISOString());
+      formData.append("isPublished", pIsPublished ? "true" : "false");
+
+      if (pPaintingFile) {
+        formData.append("image", pPaintingFile);
+      } else if (!editingPaintingId) {
+        throw new Error("Artwork photograph is required when adding a new painting.");
+      }
+
+      const url = editingPaintingId 
+        ? `${API_URL}/api/admin/auctions/${editingPaintingId}`
+        : `${API_URL}/api/admin/auctions`;
+      
+      const method = editingPaintingId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: getAuthHeaders(false),
+        credentials: "include",
+        body: formData
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to save painting.");
+      }
+
+      setAuctionCrudSuccess(
+        editingPaintingId ? "Painting updated successfully." : "New painting auction created successfully."
+      );
+
+      resetPaintingForm();
+      fetchAdminPaintings();
+    } catch (err: any) {
+      setAuctionCrudError(getFriendlyErrorMessage(err.message));
+    } finally {
+      setPFormLoading(false);
+    }
+  };
+
+  const handleDeletePainting = async (id: string, title: string) => {
+    if (!confirm(`Are you sure you want to permanently delete "${title}"?`)) {
+      return;
+    }
+    setAuctionCrudError("");
+    setAuctionCrudSuccess("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/auctions/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(false),
+        credentials: "include"
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to delete painting.");
+      }
+      setAuctionCrudSuccess("Painting deleted successfully.");
+      fetchAdminPaintings();
+    } catch (err: any) {
+      setAuctionCrudError(getFriendlyErrorMessage(err.message));
+    }
+  };
+
+  const handleCancelAuction = async (id: string, title: string) => {
+    if (!confirm(`Are you sure you want to cancel the auction for "${title}"? Bidding will be closed immediately.`)) {
+      return;
+    }
+    setAuctionCrudError("");
+    setAuctionCrudSuccess("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/auctions/${id}/cancel`, {
+        method: "POST",
+        headers: getAuthHeaders(true),
+        credentials: "include",
+        body: JSON.stringify({ reason: "Auction cancelled by artist" })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to cancel auction.");
+      }
+      setAuctionCrudSuccess("Auction cancelled.");
+      fetchAdminPaintings();
+    } catch (err: any) {
+      setAuctionCrudError(getFriendlyErrorMessage(err.message));
+    }
+  };
+
+  const handleTogglePublish = async (item: AdminPainting) => {
+    setAuctionCrudError("");
+    setAuctionCrudSuccess("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/auctions/${item.id}`, {
+        method: "PUT",
+        headers: getAuthHeaders(true),
+        credentials: "include",
+        body: JSON.stringify({ isPublished: !item.isPublished })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to update publication status.");
+      }
+      setAuctionCrudSuccess(`Painting is now ${!item.isPublished ? "published" : "hidden as draft"}.`);
+      fetchAdminPaintings();
+    } catch (err: any) {
+      setAuctionCrudError(getFriendlyErrorMessage(err.message));
+    }
+  };
+
+  const handleOpenBidsModal = async (painting: AdminPainting) => {
+    setSelectedPaintingForBids(painting);
+    setAuctionBids([]);
+    setAuctionWinner(null);
+    setBidsModalLoading(true);
+    setBidsModalError("");
+    setCopyFeedback("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/auctions/${painting.id}/bids`, {
+        headers: getAuthHeaders(false),
+        credentials: "include"
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to load bids.");
+      }
+      setAuctionBids(data.bids || []);
+      setAuctionWinner(data.winner || null);
+    } catch (err: any) {
+      setBidsModalError(err.message || "Could not load bids.");
+    } finally {
+      setBidsModalLoading(false);
+    }
+  };
+
+  const handleMarkSold = async (paintingId: string) => {
+    if (!confirm("Are you sure you want to mark this artwork as sold to the winning collector? This will confirm the final sale.")) {
+      return;
+    }
+    setAuctionCrudError("");
+    setAuctionCrudSuccess("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/auctions/${paintingId}/mark-sold`, {
+        method: "POST",
+        headers: getAuthHeaders(false),
+        credentials: "include"
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to mark as sold.");
+      }
+      setAuctionCrudSuccess("Sale confirmed! Original artwork status is now marked as Sold.");
+      fetchAdminPaintings();
+      if (selectedPaintingForBids && selectedPaintingForBids.id === paintingId) {
+        handleOpenBidsModal(selectedPaintingForBids);
+      }
+    } catch (err: any) {
+      setAuctionCrudError(getFriendlyErrorMessage(err.message));
+    }
+  };
+
+  const copyWinnerContact = (winner: AdminAuctionWinner, paintingTitle: string) => {
+    const text = `Artwork: ${paintingTitle}\nWinning Collector: ${winner.bidder.name}\nEmail: ${winner.bidder.email}\nWinning Bid: $${winner.amount.toLocaleString()}\nDate: ${new Date(winner.bidPlacedAt).toLocaleString()}`;
+    navigator.clipboard.writeText(text);
+    setCopyFeedback("Winner contact details copied to clipboard!");
+    setTimeout(() => setCopyFeedback(""), 3500);
+  };
+
   // Handle Authentication Session State
   useEffect(() => {
     const checkSession = async () => {
@@ -162,6 +491,7 @@ export default function AdminPortal() {
           setIsAdmin(data.role === "admin" || data.role === "editor");
           fetchTattoos();
           fetchAvailability();
+          fetchAdminPaintings();
         } else {
           setSession(null);
           setIsAdmin(null);
@@ -175,7 +505,7 @@ export default function AdminPortal() {
     };
 
     checkSession();
-  }, [fetchTattoos, fetchAvailability]);
+  }, [fetchTattoos, fetchAvailability, fetchAdminPaintings]);
 
   // Verify setup/reset tokens on landing page
   useEffect(() => {
@@ -234,6 +564,7 @@ export default function AdminPortal() {
       setIsAdmin(data.role === "admin" || data.role === "editor");
       fetchTattoos();
       fetchAvailability();
+      fetchAdminPaintings();
     } catch (err: any) {
       setAuthError(getFriendlyErrorMessage(err.message));
     } finally {
@@ -866,6 +1197,37 @@ export default function AdminPortal() {
           </div>
         </div>
 
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-white/10 gap-6">
+          <button
+            onClick={() => setActiveTab("tattoos")}
+            className={`pb-3 font-display font-bold uppercase tracking-wider text-sm transition-colors border-b-2 flex items-center gap-2 ${
+              activeTab === "tattoos"
+                ? "border-primary text-primary"
+                : "border-transparent text-light-gray/60 hover:text-white"
+            }`}
+          >
+            <Upload className="h-4 w-4" />
+            Tattoo Gallery & Studio
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("auctions");
+              fetchAdminPaintings();
+            }}
+            className={`pb-3 font-display font-bold uppercase tracking-wider text-sm transition-colors border-b-2 flex items-center gap-2 ${
+              activeTab === "auctions"
+                ? "border-primary text-primary"
+                : "border-transparent text-light-gray/60 hover:text-white"
+            }`}
+          >
+            <Paintbrush className="h-4 w-4" />
+            Painting Auctions ({paintings.length})
+          </button>
+        </div>
+
+        {/* TAB 1: TATTOOS & STUDIO AVAILABILITY */}
+        {activeTab === "tattoos" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left Column: Upload Form & Settings */}
           <div className="lg:col-span-5 space-y-8">
@@ -1208,6 +1570,517 @@ export default function AdminPortal() {
             )}
           </div>
         </div>
+        )}
+
+        {/* TAB 2: PAINTING AUCTIONS MANAGEMENT */}
+        {activeTab === "auctions" && (
+          <div className="space-y-8">
+            {auctionCrudError && (
+              <div className="flex items-center gap-2 p-4 bg-red-950/20 border border-red-500/30 rounded text-red-400 text-sm">
+                <AlertCircle className="h-5 w-5 shrink-0" />
+                <span>{auctionCrudError}</span>
+              </div>
+            )}
+            {auctionCrudSuccess && (
+              <div className="flex items-center gap-2 p-4 bg-green-950/20 border border-green-500/30 rounded text-green-400 text-sm">
+                <Check className="h-5 w-5 shrink-0" />
+                <span>{auctionCrudSuccess}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Left Column: Form to Create/Edit Painting */}
+              <div className="lg:col-span-5 bg-dark-gray border border-white/5 p-6 rounded-lg space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-display font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
+                    <Paintbrush className="h-5 w-5 text-primary" />
+                    {editingPaintingId ? "Edit Painting" : "Add Painting Auction"}
+                  </h2>
+                  {editingPaintingId && (
+                    <button
+                      type="button"
+                      onClick={resetPaintingForm}
+                      className="text-xs text-light-gray/60 hover:text-white uppercase tracking-wider underline font-bold"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleSavePainting} className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                      Painting Photograph {editingPaintingId ? "(Leave empty to keep existing)" : "*"}
+                    </label>
+                    <input
+                      id="painting-file-input"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setPPaintingFile(e.target.files?.[0] || null)}
+                      className="w-full bg-dark border border-white/10 rounded-md p-2.5 text-white text-xs focus:outline-none focus:border-primary file:mr-3 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-bold file:uppercase file:bg-white/10 file:text-white hover:file:bg-white/20 file:cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                      Artwork Title *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Celestial Serpent in Indigo"
+                      value={pTitle}
+                      onChange={(e) => setPTitle(e.target.value)}
+                      className="w-full bg-dark border border-white/10 rounded-md py-2.5 px-3 text-white text-sm focus:outline-none focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                        Medium
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Oil on Canvas"
+                        value={pMedium}
+                        onChange={(e) => setPMedium(e.target.value)}
+                        className="w-full bg-dark border border-white/10 rounded-md py-2 px-3 text-white text-xs focus:outline-none focus:border-secondary"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                        Dimensions
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 24 x 36 inches"
+                        value={pDimensions}
+                        onChange={(e) => setPDimensions(e.target.value)}
+                        className="w-full bg-dark border border-white/10 rounded-md py-2 px-3 text-white text-xs focus:outline-none focus:border-secondary"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                      Artwork Description & Story *
+                    </label>
+                    <textarea
+                      required
+                      rows={4}
+                      placeholder="Describe the inspiration, technique, provenance, and meaning behind this original painting..."
+                      value={pDescription}
+                      onChange={(e) => setPDescription(e.target.value)}
+                      className="w-full bg-dark border border-white/10 rounded-md py-2 px-3 text-white text-xs focus:outline-none focus:border-primary leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                        Starting Bid ($) *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        value={pStartingBid}
+                        onChange={(e) => setPStartingBid(e.target.value)}
+                        className="w-full bg-dark border border-white/10 rounded-md py-2 px-3 text-white text-xs font-mono font-bold focus:outline-none focus:border-secondary"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                        Min Increment ($) *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        value={pMinIncrement}
+                        onChange={(e) => setPMinIncrement(e.target.value)}
+                        className="w-full bg-dark border border-white/10 rounded-md py-2 px-3 text-white text-xs font-mono font-bold focus:outline-none focus:border-secondary"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                        Auction Start Time *
+                      </label>
+                      <input
+                        type="datetime-local"
+                        required
+                        value={pStartTime}
+                        onChange={(e) => setPStartTime(e.target.value)}
+                        className="w-full bg-dark border border-white/10 rounded-md py-2 px-2.5 text-white text-xs focus:outline-none focus:border-secondary"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs uppercase tracking-widest font-bold text-white/50 block">
+                        Auction End Time *
+                      </label>
+                      <input
+                        type="datetime-local"
+                        required
+                        value={pEndTime}
+                        onChange={(e) => setPEndTime(e.target.value)}
+                        className="w-full bg-dark border border-white/10 rounded-md py-2 px-2.5 text-white text-xs focus:outline-none focus:border-secondary"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 pt-2">
+                    <input
+                      id="publish-toggle"
+                      type="checkbox"
+                      checked={pIsPublished}
+                      onChange={(e) => setPIsPublished(e.target.checked)}
+                      className="rounded border-white/20 bg-dark text-primary focus:ring-0 h-4 w-4 cursor-pointer"
+                    />
+                    <label htmlFor="publish-toggle" className="text-xs font-bold uppercase tracking-wider text-white cursor-pointer select-none">
+                      Publish to Website (Visible to Public)
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={pFormLoading}
+                    className="w-full py-3 bg-primary text-white font-bold uppercase tracking-wider rounded-md hover:neon-pink-border-glow transition-all flex justify-center items-center gap-2 text-sm"
+                  >
+                    {pFormLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : editingPaintingId ? (
+                      "Save Painting Updates"
+                    ) : (
+                      "Publish Painting Auction"
+                    )}
+                  </button>
+                </form>
+              </div>
+
+              {/* Right Column: List of Existing Painting Auctions */}
+              <div className="lg:col-span-7 bg-dark-gray border border-white/5 p-6 rounded-lg space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-display font-extrabold text-white uppercase tracking-wider">
+                    Painting Auctions Catalog
+                  </h2>
+                  <span className="text-xs font-bold uppercase tracking-widest text-light-gray/60 font-mono">
+                    {paintings.length} {paintings.length === 1 ? "Painting" : "Paintings"}
+                  </span>
+                </div>
+
+                {paintingsLoading ? (
+                  <div className="flex flex-col items-center justify-center p-12 space-y-3">
+                    <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                    <p className="text-xs uppercase tracking-widest text-light-gray/60 font-bold">
+                      Loading Painting Auctions...
+                    </p>
+                  </div>
+                ) : paintings.length === 0 ? (
+                  <div className="border border-dashed border-white/10 p-12 text-center rounded-lg space-y-3">
+                    <Paintbrush className="h-10 w-10 text-light-gray/30 mx-auto" />
+                    <p className="text-light-gray/50 uppercase tracking-widest text-xs font-semibold">
+                      No paintings listed yet.
+                    </p>
+                    <p className="text-light-gray/40 text-xs max-w-sm mx-auto">
+                      Use the form on the left to list Jordynn's original artwork for online auction.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-[85vh] overflow-y-auto pr-2">
+                    {paintings.map((p) => (
+                      <div
+                        key={p.id}
+                        className="p-4 bg-dark/70 border border-white/5 hover:border-white/15 rounded-lg transition-all flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
+                      >
+                        <div className="flex items-center gap-4">
+                          <img
+                            src={p.imageUrl}
+                            alt={p.title}
+                            className="w-16 h-20 object-cover rounded bg-dark border border-white/10 shrink-0"
+                          />
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-base font-bold text-white uppercase tracking-wide">
+                                {p.title}
+                              </h3>
+                              {/* Status Badge */}
+                              {p.status === "live" && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">
+                                  Live
+                                </span>
+                              )}
+                              {p.status === "upcoming" && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full">
+                                  Upcoming
+                                </span>
+                              )}
+                              {p.status === "sold" && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                                  Sold
+                                </span>
+                              )}
+                              {p.status === "ended" && !p.isSaleConfirmed && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider bg-white/10 text-light-gray border border-white/20 px-2 py-0.5 rounded-full">
+                                  Ended
+                                </span>
+                              )}
+                              {p.status === "cancelled" && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider bg-red-950/40 text-red-400 border border-red-800/40 px-2 py-0.5 rounded-full">
+                                  Cancelled
+                                </span>
+                              )}
+                              {!p.isPublished && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider bg-white/5 text-light-gray/50 border border-white/10 px-2 py-0.5 rounded-full">
+                                  Draft
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="text-xs text-light-gray/60">
+                              {p.medium || "Original Artwork"} {p.dimensions ? `• ${p.dimensions}` : ""}
+                            </p>
+
+                            <div className="flex items-center gap-4 text-xs font-mono pt-1">
+                              <span>
+                                Start: <strong className="text-white">${p.startingBid}</strong>
+                              </span>
+                              <span>
+                                Highest: <strong className="text-secondary">${p.currentHighestBid || p.startingBid}</strong>
+                              </span>
+                              <span>
+                                Bids: <strong className="text-white">{p.bidCount}</strong>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-wrap sm:flex-col gap-2 w-full sm:w-auto shrink-0 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenBidsModal(p)}
+                            className="px-3 py-1.5 bg-secondary/10 border border-secondary/30 text-secondary hover:bg-secondary/20 rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            Bids & Winner
+                          </button>
+
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => startEditPainting(p)}
+                              className="p-1.5 bg-white/5 hover:bg-white/15 border border-white/10 text-white rounded text-xs transition-colors"
+                              title="Edit Painting"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePublish(p)}
+                              className={`p-1.5 border rounded text-xs transition-colors ${
+                                p.isPublished
+                                  ? "bg-white/5 border-white/10 text-light-gray/70 hover:text-white"
+                                  : "bg-secondary/10 border-secondary/30 text-secondary"
+                              }`}
+                              title={p.isPublished ? "Unpublish (Make Draft)" : "Publish (Make Public)"}
+                            >
+                              {p.isPublished ? "Unpub" : "Pub"}
+                            </button>
+
+                            {p.status !== "ended" && p.status !== "sold" && p.status !== "cancelled" && (
+                              <button
+                                type="button"
+                                onClick={() => handleCancelAuction(p.id, p.title)}
+                                className="p-1.5 bg-red-950/20 hover:bg-red-950/40 border border-red-500/30 text-red-400 rounded text-xs transition-colors"
+                                title="Cancel Auction"
+                              >
+                                <Ban className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePainting(p.id, p.title)}
+                              className="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs transition-colors"
+                              title="Delete Painting (Allowed only if zero bids exist)"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: VIEW BIDS & WINNER CONTACT DETAILS */}
+        {selectedPaintingForBids && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-dark-gray border border-white/10 w-full max-w-2xl rounded-lg p-6 space-y-6 relative max-h-[90vh] overflow-y-auto shadow-2xl">
+              <button
+                type="button"
+                onClick={() => setSelectedPaintingForBids(null)}
+                className="absolute top-5 right-5 p-1 rounded-full text-light-gray/60 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Close Modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="flex items-center gap-4">
+                <img
+                  src={selectedPaintingForBids.imageUrl}
+                  alt={selectedPaintingForBids.title}
+                  className="w-16 h-20 object-cover rounded bg-dark border border-white/10"
+                />
+                <div>
+                  <h3 className="text-xl font-display font-bold text-white uppercase tracking-wide">
+                    {selectedPaintingForBids.title}
+                  </h3>
+                  <p className="text-xs text-light-gray/60 font-mono mt-0.5">
+                    Starting Bid: ${selectedPaintingForBids.startingBid} • Total Bids: {selectedPaintingForBids.bidCount}
+                  </p>
+                </div>
+              </div>
+
+              {/* Copy Feedback Toast */}
+              {copyFeedback && (
+                <div className="p-3 bg-green-950/20 border border-green-500/30 rounded text-green-400 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{copyFeedback}</span>
+                </div>
+              )}
+
+              {/* Bids Modal Error Toast */}
+              {bidsModalError && (
+                <div className="p-3 bg-red-950/20 border border-red-500/30 rounded text-red-400 text-xs flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{bidsModalError}</span>
+                </div>
+              )}
+
+              {/* Winner Information Card */}
+              {auctionWinner ? (
+                <div className="p-5 bg-secondary/5 border border-secondary/30 rounded-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-widest text-secondary flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4" />
+                      {auctionWinner.isSaleConfirmed ? "Confirmed Winner" : "Provisional Winning Bidder"}
+                    </span>
+                    <span className="text-xl font-display font-extrabold text-secondary font-mono">
+                      ${auctionWinner.amount.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-light-gray/50 font-bold">Collector Name</p>
+                      <p className="text-white font-semibold mt-0.5">{auctionWinner.bidder.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-light-gray/50 font-bold">Email Address</p>
+                      <p className="text-white font-mono mt-0.5">{auctionWinner.bidder.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => copyWinnerContact(auctionWinner, selectedPaintingForBids.title)}
+                      className="px-4 py-2 bg-secondary text-dark rounded text-xs font-bold uppercase tracking-wider hover:neon-pink-border-glow transition-all flex items-center gap-1.5"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy Contact Details
+                    </button>
+
+                    {!auctionWinner.isSaleConfirmed && (
+                      <button
+                        type="button"
+                        onClick={() => handleMarkSold(selectedPaintingForBids.id)}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Confirm Sale (Mark as Sold)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-dark/50 border border-white/5 rounded text-xs text-light-gray/50 text-center">
+                  No winning bidder recorded for this auction item yet.
+                </div>
+              )}
+
+              {/* Bids Log Table */}
+              <div className="space-y-3">
+                <h4 className="text-xs uppercase tracking-widest font-bold text-white/60">
+                  Full Bid History ({auctionBids.length})
+                </h4>
+
+                {bidsModalLoading ? (
+                  <div className="py-8 text-center">
+                    <Loader2 className="h-6 w-6 text-primary animate-spin mx-auto" />
+                  </div>
+                ) : auctionBids.length === 0 ? (
+                  <p className="text-xs text-light-gray/40 italic py-4 text-center">
+                    No bids have been submitted yet.
+                  </p>
+                ) : (
+                  <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                    {auctionBids.map((b, idx) => (
+                      <div
+                        key={b.id || idx}
+                        className={`p-3 rounded text-xs flex items-center justify-between ${
+                          idx === 0
+                            ? "bg-secondary/10 border border-secondary/30 text-white"
+                            : "bg-dark/60 border border-white/5 text-light-gray/70"
+                        }`}
+                      >
+                        <div>
+                          <p className="font-semibold text-white">
+                            {b.bidder?.name || "Participant"}{" "}
+                            <span className="text-[11px] text-light-gray/50 font-mono">
+                              ({b.bidder?.email})
+                            </span>
+                          </p>
+                          <p className="text-[10px] text-light-gray/40 font-mono mt-0.5">
+                            {new Date(b.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-mono font-bold text-secondary">
+                            ${b.amount.toLocaleString()}
+                          </p>
+                          <span className="text-[9px] uppercase tracking-wider font-bold opacity-60">
+                            {b.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPaintingForBids(null)}
+                  className="px-5 py-2 bg-white/5 border border-white/10 text-white rounded text-xs font-bold uppercase tracking-wider hover:bg-white/10 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
