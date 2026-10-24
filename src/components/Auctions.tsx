@@ -194,21 +194,6 @@ export default function Auctions({ onSelectPainting }: AuctionsProps) {
                 Jordynn is currently crafting a fresh collection of original canvas and wood-panel paintings. When new auction dates open, you will be able to register and place live bids right here.
               </p>
             </div>
-
-            <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <a
-                href="#booking"
-                className="w-full sm:w-auto px-6 py-3 rounded-full bg-primary text-white font-bold uppercase tracking-wider text-xs hover:neon-pink-border-glow transition-all"
-              >
-                Inquire on Custom Commissions
-              </a>
-              <a
-                href="#work"
-                className="w-full sm:w-auto px-6 py-3 rounded-full border border-white/10 text-white/80 hover:text-white hover:bg-white/5 font-bold uppercase tracking-wider text-xs transition-colors"
-              >
-                Explore Tattoo Portfolio
-              </a>
-            </div>
           </motion.div>
         ) : filteredAuctions.length === 0 ? (
           <div className="text-center py-16 text-light-gray/50 uppercase tracking-widest text-xs font-semibold">
@@ -254,7 +239,7 @@ export default function Auctions({ onSelectPainting }: AuctionsProps) {
                       <div className="absolute top-4 left-4 z-10">
                         {isLive && (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-dark/80 backdrop-blur-md border border-secondary text-secondary text-xs font-extrabold uppercase tracking-widest shadow-[0_0_12px_rgba(0,229,255,0.5)]">
-                            <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+                            <Flame className="h-3.5 w-3.5 text-secondary animate-pulse" />
                             Live Auction
                           </span>
                         )}
@@ -277,7 +262,7 @@ export default function Auctions({ onSelectPainting }: AuctionsProps) {
                         )}
                       </div>
 
-                      {/* Live Countdown Overlay */}
+                      {/* Countdown Overlay (Live or Upcoming) */}
                       {isLive && countdown && (
                         <div className="absolute bottom-4 left-4 right-4 z-10 bg-dark/85 backdrop-blur-md border border-white/10 px-4 py-2.5 rounded-lg flex items-center justify-between text-xs">
                           <span className="text-white/60 uppercase tracking-widest font-semibold flex items-center gap-1.5">
@@ -289,6 +274,17 @@ export default function Auctions({ onSelectPainting }: AuctionsProps) {
                               countdown.isUrgent ? "text-primary animate-pulse" : "text-white"
                             }`}
                           >
+                            {countdown.text}
+                          </span>
+                        </div>
+                      )}
+                      {isUpcoming && countdown && (
+                        <div className="absolute bottom-4 left-4 right-4 z-10 bg-dark/85 backdrop-blur-md border border-white/10 px-4 py-2.5 rounded-lg flex items-center justify-between text-xs">
+                          <span className="text-white/60 uppercase tracking-widest font-semibold flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5 text-yellow-400" />
+                            Opens In
+                          </span>
+                          <span className="font-mono font-bold tracking-wider text-yellow-400">
                             {countdown.text}
                           </span>
                         </div>

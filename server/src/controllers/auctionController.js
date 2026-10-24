@@ -69,6 +69,8 @@ const serializePublicBid = (bid) => {
 
 // Admin Painting Serializer (Includes Private Details)
 const serializeAdminPainting = (painting, now = new Date()) => {
+  const compStatus = getComputedStatus(painting, now);
+  const isPub = painting.status === "published" || painting.status === "sold";
   return {
     id: painting._id,
     title: painting.title,
@@ -82,7 +84,9 @@ const serializeAdminPainting = (painting, now = new Date()) => {
     startTime: painting.startTime,
     endTime: painting.endTime,
     rawStatus: painting.status,
-    computedStatus: getComputedStatus(painting, now),
+    computedStatus: compStatus,
+    status: compStatus,
+    isPublished: isPub,
     currentHighestBid: painting.currentHighestBid,
     bidCount: painting.bidCount,
     isSaleConfirmed: painting.isSaleConfirmed,
@@ -548,7 +552,8 @@ const createPainting = async (req, res) => {
     minBidIncrement,
     startTime,
     endTime,
-    publishImmediately
+    publishImmediately,
+    isPublished
   } = req.body;
 
   if (!title || !title.trim()) {
@@ -586,7 +591,11 @@ const createPainting = async (req, res) => {
       folder: "kapriink/paintings"
     });
 
-    const isPublish = publishImmediately === "true" || publishImmediately === true;
+    const isPublish =
+      publishImmediately === "true" ||
+      publishImmediately === true ||
+      isPublished === "true" ||
+      isPublished === true;
 
     const painting = new Painting({
       title: title.trim(),
@@ -634,7 +643,10 @@ const updatePainting = async (req, res) => {
       startingBid,
       minBidIncrement,
       startTime,
-      endTime
+      endTime,
+      isPublished,
+      publishImmediately,
+      status
     } = req.body;
 
     if (title && title.trim()) painting.title = title.trim();
@@ -670,6 +682,35 @@ const updatePainting = async (req, res) => {
       }
     }
 
+    // Handle publication status toggle if provided
+    if (isPublished !== undefined || publishImmediately !== undefined || status !== undefined) {
+      const wantPublished =
+        isPublished === true ||
+        isPublished === "true" ||
+        publishImmediately === true ||
+        publishImmediately === "true" ||
+        status === "published";
+
+      const wantUnpublished =
+        isPublished === false ||
+        isPublished === "false" ||
+        publishImmediately === false ||
+        publishImmediately === "false" ||
+        status === "draft";
+
+      if (wantPublished && painting.status !== "sold") {
+        const targetEndTime = painting.endTime;
+        if (new Date(targetEndTime) <= new Date()) {
+          return res.status(400).json({
+            message: "Cannot publish an auction whose end time has already passed. Please update the schedule first."
+          });
+        }
+        painting.status = "published";
+      } else if (wantUnpublished && painting.status !== "sold") {
+        painting.status = "draft";
+      }
+    }
+
     // Handle image replacement if a new file is uploaded
     if (req.file) {
       const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -691,6 +732,8 @@ const updatePainting = async (req, res) => {
     }
 
     await painting.save();
+
+    broadcastAuctionStatus(painting._id, getComputedStatus(painting, new Date()));
 
     res.json(serializeAdminPainting(painting, new Date()));
   } catch (err) {
@@ -728,6 +771,37 @@ const publishAuction = async (req, res) => {
   } catch (err) {
     console.error("publishAuction error:", err.message);
     res.status(500).json({ message: "Server error publishing auction." });
+  }
+};
+
+const unpublishAuction = async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: "Invalid auction ID." });
+  }
+
+  try {
+    const painting = await Painting.findById(id);
+    if (!painting) {
+      return res.status(404).json({ message: "Artwork not found." });
+    }
+
+    if (painting.status === "sold") {
+      return res.status(400).json({ message: "Cannot move a sold painting back to drafts." });
+    }
+
+    painting.status = "draft";
+    await painting.save();
+
+    broadcastAuctionStatus(id, "draft");
+
+    res.json({
+      message: "Painting moved to drafts successfully.",
+      painting: serializeAdminPainting(painting, new Date())
+    });
+  } catch (err) {
+    console.error("unpublishAuction error:", err.message);
+    res.status(500).json({ message: "Server error unpublishing auction." });
   }
 };
 
@@ -870,6 +944,7 @@ module.exports = {
   createPainting,
   updatePainting,
   publishAuction,
+  unpublishAuction,
   cancelAuction,
   markAuctionSold,
   deletePainting,

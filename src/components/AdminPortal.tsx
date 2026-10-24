@@ -308,6 +308,7 @@ export default function AdminPortal() {
       formData.append("startTime", new Date(pStartTime).toISOString());
       formData.append("endTime", new Date(pEndTime).toISOString());
       formData.append("isPublished", pIsPublished ? "true" : "false");
+      formData.append("publishImmediately", pIsPublished ? "true" : "false");
 
       if (pPaintingFile) {
         formData.append("image", pPaintingFile);
@@ -413,22 +414,41 @@ export default function AdminPortal() {
     setAuctionCrudSuccess("");
 
     try {
-      const res = await safeFetchJson(
-        `${API_URL}/api/admin/auctions/${item.id}`,
+      const nextPublished = !item.isPublished;
+      const endpoint = nextPublished
+        ? `${API_URL}/api/admin/auctions/${item.id}/publish`
+        : `${API_URL}/api/admin/auctions/${item.id}/unpublish`;
+
+      let res = await safeFetchJson<{ message?: string; painting?: AdminPainting } | AdminPainting>(
+        endpoint,
         {
-          method: "PUT",
+          method: "POST",
           headers: getAuthHeaders(true),
-          credentials: "include",
-          body: JSON.stringify({ isPublished: !item.isPublished })
+          credentials: "include"
         },
-        `/api/admin/auctions/${item.id}`
+        endpoint
       );
+
+      if (!res.ok) {
+        res = await safeFetchJson<AdminPainting>(
+          `${API_URL}/api/admin/auctions/${item.id}`,
+          {
+            method: "PUT",
+            headers: getAuthHeaders(true),
+            credentials: "include",
+            body: JSON.stringify({ isPublished: nextPublished })
+          },
+          `/api/admin/auctions/${item.id}`
+        );
+      }
 
       if (!res.ok) {
         throw new Error(res.error || "Failed to update publication status.");
       }
 
-      setAuctionCrudSuccess(`Painting is now ${!item.isPublished ? "published" : "hidden as draft"}.`);
+      setAuctionCrudSuccess(
+        nextPublished ? "Painting is now published." : "Painting moved to drafts."
+      );
       fetchAdminPaintings();
     } catch (err: any) {
       setAuctionCrudError(getFriendlyErrorMessage(err.message));

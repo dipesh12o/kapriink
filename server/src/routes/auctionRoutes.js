@@ -14,6 +14,7 @@ const {
   createPainting,
   updatePainting,
   publishAuction,
+  unpublishAuction,
   cancelAuction,
   markAuctionSold,
   deletePainting,
@@ -52,6 +53,7 @@ adminRouter.get("/:id", getAdminAuctionById);
 adminRouter.post("/", upload.single("image"), createPainting);
 adminRouter.put("/:id", upload.single("image"), updatePainting);
 adminRouter.post("/:id/publish", publishAuction);
+adminRouter.post("/:id/unpublish", unpublishAuction);
 adminRouter.post("/:id/cancel", cancelAuction);
 adminRouter.post("/:id/mark-sold", markAuctionSold);
 adminRouter.delete("/:id", deletePainting);
