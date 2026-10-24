@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Flame, Paintbrush, ArrowRight, CheckCircle2 } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import { formatCountdown } from "../utils/auctionUtils";
+import { safeFetchJson } from "../utils/api";
 
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
@@ -48,10 +49,9 @@ export default function Auctions({ onSelectPainting }: AuctionsProps) {
   // Fetch public auctions
   const fetchAuctions = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/auctions`);
-      if (res.ok) {
-        const data = await res.json();
-        setAuctions(data);
+      const res = await safeFetchJson<PublicPainting[]>(`${API_URL}/api/auctions`, undefined, "/api/auctions");
+      if (res.ok && res.data) {
+        setAuctions(res.data);
       }
     } catch (err) {
       console.error("Failed to load auctions:", err);

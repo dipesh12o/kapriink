@@ -43,6 +43,24 @@ app.use("/api/availability", availabilityRoutes);
 app.use("/api/auctions", auctionRoutes);
 app.use("/api/admin/auctions", adminAuctionRoutes);
 
+// Health check endpoint for deployment monitoring
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "kaprink-backend",
+    version: "1.0.0",
+    features: ["tattoos", "availability", "auctions"],
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 404 Fallback for unmatched API routes - ensures backend always returns JSON instead of HTML
+app.use("/api/*", (req, res) => {
+  res.status(404).json({
+    message: `API endpoint ${req.method} ${req.originalUrl} not found.`
+  });
+});
+
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error("Unhandled server error:", err.stack);

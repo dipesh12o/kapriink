@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import { formatCountdown } from "../utils/auctionUtils";
+import { safeFetchJson } from "../utils/api";
 
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
@@ -99,23 +100,18 @@ export default function PaintingDetails({ paintingId, onBack }: PaintingDetailsP
       setError(null);
 
       const [resPainting, resBids] = await Promise.all([
-        fetch(`${API_URL}/api/auctions/${paintingId}`),
-        fetch(`${API_URL}/api/auctions/${paintingId}/bids`)
+        safeFetchJson<PaintingDetail>(`${API_URL}/api/auctions/${paintingId}`, undefined, `/api/auctions/${paintingId}`),
+        safeFetchJson<AnonymizedBid[]>(`${API_URL}/api/auctions/${paintingId}/bids`, undefined, `/api/auctions/${paintingId}/bids`)
       ]);
 
       if (!resPainting.ok) {
-        if (resPainting.status === 404) {
-          throw new Error("Painting not found or unavailable.");
-        }
-        throw new Error("Failed to load painting details.");
+        throw new Error(resPainting.error || "Failed to load painting details.");
       }
 
-      const pData: PaintingDetail = await resPainting.json();
-      setPainting(pData);
+      setPainting(resPainting.data || null);
 
-      if (resBids.ok) {
-        const bData: AnonymizedBid[] = await resBids.json();
-        setBids(bData);
+      if (resBids.ok && resBids.data) {
+        setBids(resBids.data);
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
@@ -204,23 +200,26 @@ export default function PaintingDetails({ paintingId, onBack }: PaintingDetailsP
     setDevOtpHint(null);
 
     try {
-      const res = await fetch(`${API_URL}/api/auctions/request-verification`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: reqEmail, name: reqName })
-      });
-      const data = await res.json();
+      const res = await safeFetchJson(
+        `${API_URL}/api/auctions/request-verification`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: reqEmail, name: reqName })
+        },
+        "/api/auctions/request-verification"
+      );
 
       if (!res.ok) {
-        throw new Error(data.message || "Failed to send verification code.");
+        throw new Error(res.error || "Failed to send verification code.");
       }
 
       setVerificationSent(true);
-      setAuthSuccess(data.message || "Verification code sent to your email.");
+      setAuthSuccess(res.data?.message || "Verification code sent to your email.");
 
       // If developer/sandbox returned preview token
-      if (data.devOtp) {
-        setDevOtpHint(data.devOtp);
+      if (res.data?.devOtp) {
+        setDevOtpHint(res.data.devOtp);
       }
     } catch (err: any) {
       setAuthError(err.message || "Could not request verification.");
@@ -237,25 +236,31 @@ export default function PaintingDetails({ paintingId, onBack }: PaintingDetailsP
     setAuthSuccess(null);
 
     try {
-      const res = await fetch(`${API_URL}/api/auctions/verify-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: reqEmail, code: otpCode })
-      });
-      const data = await res.json();
+      const res = await safeFetchJson(
+        `${API_URL}/api/auctions/verify-email`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: reqEmail, code: otpCode })
+        },
+        "/api/auctions/verify-email"
+      );
 
       if (!res.ok) {
-        throw new Error(data.message || "Invalid or expired verification code.");
+        throw new Error(res.error || "Invalid or expired verification code.");
       }
 
-      // Store verified bidder credentials in localStorage
-      localStorage.setItem("kaprink_bidder_token", data.token);
-      localStorage.setItem("kaprink_bidder_email", data.participant.email);
-      localStorage.setItem("kaprink_bidder_name", data.participant.name);
+      const receivedToken = res.data?.token || res.data?.bidderToken;
+      const participant = res.data?.participant;
 
-      setBidderToken(data.token);
-      setBidderEmail(data.participant.email);
-      setBidderName(data.participant.name);
+      // Store verified bidder credentials in localStorage
+      localStorage.setItem("kaprink_bidder_token", receivedToken);
+      localStorage.setItem("kaprink_bidder_email", participant?.email || reqEmail);
+      localStorage.setItem("kaprink_bidder_name", participant?.name || reqName);
+
+      setBidderToken(receivedToken);
+      setBidderEmail(participant?.email || reqEmail);
+      setBidderName(participant?.name || reqName);
 
       setAuthSuccess("Email verified successfully! You are now authorized to place bids.");
       setVerificationSent(false);
@@ -303,48 +308,51 @@ export default function PaintingDetails({ paintingId, onBack }: PaintingDetailsP
     const idempotencyKey = "bid_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
 
     try {
-      const res = await fetch(`${API_URL}/api/auctions/${paintingId}/bid`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-bidder-token": bidderToken
+      const res = await safeFetchJson(
+        `${API_URL}/api/auctions/${paintingId}/bid`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-bidder-token": bidderToken
+          },
+          body: JSON.stringify({
+            amount: numericAmount,
+            idempotencyKey,
+            termsAccepted: true
+          })
         },
-        body: JSON.stringify({
-          amount: numericAmount,
-          idempotencyKey
-        })
-      });
-
-      const data = await res.json();
+        `/api/auctions/${paintingId}/bid`
+      );
 
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
           handleLogoutBidder();
           throw new Error("Your bidder session has expired. Please verify your email again.");
         }
-        throw new Error(data.message || "Failed to place bid.");
+        throw new Error(res.error || "Failed to place bid.");
       }
 
       setBidSuccess(`Success! Your bid of $${numericAmount.toLocaleString()} has been placed.`);
 
       // Update painting state with authoritative server response
-      if (data.painting) {
+      if (res.data?.painting) {
         setPainting((prev) => {
           if (!prev) return null;
           return {
             ...prev,
-            currentHighestBid: data.painting.currentHighestBid,
-            bidCount: data.painting.bidCount,
+            currentHighestBid: res.data.painting.currentHighestBid,
+            bidCount: res.data.painting.bidCount,
             hasBids: true
           };
         });
       }
 
       // Prepend bid to list if returned
-      if (data.bid) {
+      if (res.data?.bid) {
         setBids((prev) => {
-          if (prev.some((b) => b.id === data.bid.id)) return prev;
-          return [data.bid, ...prev];
+          if (prev.some((b) => b.id === res.data.bid.id)) return prev;
+          return [res.data.bid, ...prev];
         });
       }
 

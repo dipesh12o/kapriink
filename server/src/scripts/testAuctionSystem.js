@@ -321,7 +321,19 @@ async function runTests() {
     if (resAvailability.status !== 200 || !resAvailability.data.days) {
       throw new Error(`Regression: /api/availability returned status ${resAvailability.status}`);
     }
-    console.log("✓ Existing /api/tattoos and /api/availability endpoints intact and functioning 100%.");
+
+    // Health check endpoint verification
+    const resHealth = await api("/api/health");
+    if (resHealth.status !== 200 || resHealth.data?.status !== "ok") {
+      throw new Error(`Health check: /api/health returned status ${resHealth.status}`);
+    }
+
+    // 404 JSON fallback verification (must never return HTML <!DOCTYPE)
+    const res404 = await api("/api/nonexistent-endpoint-test");
+    if (res404.status !== 404 || !res404.data?.message) {
+      throw new Error(`404 Fallback: Expected JSON message, got ${JSON.stringify(res404.data)}`);
+    }
+    console.log("✓ Existing endpoints, /api/health, and JSON 404 fallback verified.");
 
     console.log("\n==================================================");
     console.log("ALL AUCTION SYSTEM TESTS PASSED SUCCESSFULLY! (10/10)");

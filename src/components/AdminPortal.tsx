@@ -20,6 +20,7 @@ import {
   Ban,
   X
 } from "lucide-react";
+import { safeFetchJson } from "../utils/api";
 
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
@@ -235,25 +236,25 @@ export default function AdminPortal() {
 
   // Fetch Paintings from Admin Endpoint
   const fetchAdminPaintings = useCallback(async () => {
-    try {
-      setPaintingsLoading(true);
-      setAuctionCrudError("");
-      const res = await fetch(`${API_URL}/api/admin/auctions`, {
+    setPaintingsLoading(true);
+    setAuctionCrudError("");
+    const res = await safeFetchJson<AdminPainting[]>(
+      `${API_URL}/api/admin/auctions`,
+      {
         headers: getAuthHeaders(false),
         credentials: "include"
-      });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to load paintings.");
-      }
-      const data = await res.json();
-      setPaintings(data);
-    } catch (err: any) {
-      setAuctionCrudError("Failed to fetch paintings: " + getFriendlyErrorMessage(err.message));
-    } finally {
-      setPaintingsLoading(false);
+      },
+      "/api/admin/auctions"
+    );
+
+    if (!res.ok) {
+      setAuctionCrudError("Failed to fetch paintings: " + (res.error || "Unknown server error"));
+      setPaintings([]);
+    } else {
+      setPaintings(res.data || []);
     }
-  }, [getAuthHeaders, getFriendlyErrorMessage]);
+    setPaintingsLoading(false);
+  }, [getAuthHeaders]);
 
   const resetPaintingForm = () => {
     setEditingPaintingId(null);
@@ -320,16 +321,19 @@ export default function AdminPortal() {
       
       const method = editingPaintingId ? "PUT" : "POST";
 
-      const res = await fetch(url, {
-        method,
-        headers: getAuthHeaders(false),
-        credentials: "include",
-        body: formData
-      });
+      const res = await safeFetchJson(
+        url,
+        {
+          method,
+          headers: getAuthHeaders(false),
+          credentials: "include",
+          body: formData
+        },
+        url
+      );
 
-      const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Failed to save painting.");
+        throw new Error(res.error || "Failed to save painting.");
       }
 
       setAuctionCrudSuccess(
@@ -353,15 +357,20 @@ export default function AdminPortal() {
     setAuctionCrudSuccess("");
 
     try {
-      const res = await fetch(`${API_URL}/api/admin/auctions/${id}`, {
-        method: "DELETE",
-        headers: getAuthHeaders(false),
-        credentials: "include"
-      });
-      const data = await res.json();
+      const res = await safeFetchJson(
+        `${API_URL}/api/admin/auctions/${id}`,
+        {
+          method: "DELETE",
+          headers: getAuthHeaders(false),
+          credentials: "include"
+        },
+        `/api/admin/auctions/${id}`
+      );
+
       if (!res.ok) {
-        throw new Error(data.message || "Failed to delete painting.");
+        throw new Error(res.error || "Failed to delete painting.");
       }
+
       setAuctionCrudSuccess("Painting deleted successfully.");
       fetchAdminPaintings();
     } catch (err: any) {
@@ -377,16 +386,21 @@ export default function AdminPortal() {
     setAuctionCrudSuccess("");
 
     try {
-      const res = await fetch(`${API_URL}/api/admin/auctions/${id}/cancel`, {
-        method: "POST",
-        headers: getAuthHeaders(true),
-        credentials: "include",
-        body: JSON.stringify({ reason: "Auction cancelled by artist" })
-      });
-      const data = await res.json();
+      const res = await safeFetchJson(
+        `${API_URL}/api/admin/auctions/${id}/cancel`,
+        {
+          method: "POST",
+          headers: getAuthHeaders(true),
+          credentials: "include",
+          body: JSON.stringify({ reason: "Auction cancelled by artist" })
+        },
+        `/api/admin/auctions/${id}/cancel`
+      );
+
       if (!res.ok) {
-        throw new Error(data.message || "Failed to cancel auction.");
+        throw new Error(res.error || "Failed to cancel auction.");
       }
+
       setAuctionCrudSuccess("Auction cancelled.");
       fetchAdminPaintings();
     } catch (err: any) {
@@ -399,16 +413,21 @@ export default function AdminPortal() {
     setAuctionCrudSuccess("");
 
     try {
-      const res = await fetch(`${API_URL}/api/admin/auctions/${item.id}`, {
-        method: "PUT",
-        headers: getAuthHeaders(true),
-        credentials: "include",
-        body: JSON.stringify({ isPublished: !item.isPublished })
-      });
-      const data = await res.json();
+      const res = await safeFetchJson(
+        `${API_URL}/api/admin/auctions/${item.id}`,
+        {
+          method: "PUT",
+          headers: getAuthHeaders(true),
+          credentials: "include",
+          body: JSON.stringify({ isPublished: !item.isPublished })
+        },
+        `/api/admin/auctions/${item.id}`
+      );
+
       if (!res.ok) {
-        throw new Error(data.message || "Failed to update publication status.");
+        throw new Error(res.error || "Failed to update publication status.");
       }
+
       setAuctionCrudSuccess(`Painting is now ${!item.isPublished ? "published" : "hidden as draft"}.`);
       fetchAdminPaintings();
     } catch (err: any) {
@@ -425,16 +444,21 @@ export default function AdminPortal() {
     setCopyFeedback("");
 
     try {
-      const res = await fetch(`${API_URL}/api/admin/auctions/${painting.id}/bids`, {
-        headers: getAuthHeaders(false),
-        credentials: "include"
-      });
-      const data = await res.json();
+      const res = await safeFetchJson<{ bids: AdminBidDetail[]; winner: AdminAuctionWinner | null }>(
+        `${API_URL}/api/admin/auctions/${painting.id}/bids`,
+        {
+          headers: getAuthHeaders(false),
+          credentials: "include"
+        },
+        `/api/admin/auctions/${painting.id}/bids`
+      );
+
       if (!res.ok) {
-        throw new Error(data.message || "Failed to load bids.");
+        setBidsModalError(res.error || "Could not load bids.");
+      } else {
+        setAuctionBids(res.data?.bids || []);
+        setAuctionWinner(res.data?.winner || null);
       }
-      setAuctionBids(data.bids || []);
-      setAuctionWinner(data.winner || null);
     } catch (err: any) {
       setBidsModalError(err.message || "Could not load bids.");
     } finally {
@@ -450,15 +474,20 @@ export default function AdminPortal() {
     setAuctionCrudSuccess("");
 
     try {
-      const res = await fetch(`${API_URL}/api/admin/auctions/${paintingId}/mark-sold`, {
-        method: "POST",
-        headers: getAuthHeaders(false),
-        credentials: "include"
-      });
-      const data = await res.json();
+      const res = await safeFetchJson(
+        `${API_URL}/api/admin/auctions/${paintingId}/mark-sold`,
+        {
+          method: "POST",
+          headers: getAuthHeaders(false),
+          credentials: "include"
+        },
+        `/api/admin/auctions/${paintingId}/mark-sold`
+      );
+
       if (!res.ok) {
-        throw new Error(data.message || "Failed to mark as sold.");
+        throw new Error(res.error || "Failed to mark as sold.");
       }
+
       setAuctionCrudSuccess("Sale confirmed! Original artwork status is now marked as Sold.");
       fetchAdminPaintings();
       if (selectedPaintingForBids && selectedPaintingForBids.id === paintingId) {
